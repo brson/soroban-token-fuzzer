@@ -1,0 +1,46 @@
+[package]
+name = "fuzzing-native-token-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[features]
+default = ["testutils"]
+testutils = ["soroban-sdk/testutils"]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.fuzzing-native-token]
+path = ".."
+
+[dependencies.soroban-sdk]
+path = "../../rs-soroban-sdk/soroban-sdk"
+
+[dependencies.soroban-env-common]
+path = "../../rs-soroban-env/soroban-env-common"
+
+[dev_dependencies.soroban-sdk]
+path = "../../rs-soroban-sdk/soroban-sdk"
+features = ["testutils"]
+
+[patch."https://github.com/stellar/rs-soroban-env"]
+soroban-env-common = { path = "../../rs-soroban-env/soroban-env-common" }
+soroban-env-guest = { path = "../../rs-soroban-env/soroban-env-guest" }
+soroban-env-host = { path = "../../rs-soroban-env/soroban-env-host" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_native_token_contract"
+path = "fuzz_targets/fuzz_native_token_contract.rs"
+test = false
+doc = false
