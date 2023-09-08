@@ -1,9 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, token::Client as TokenClient, Address, Env, IntoVal,
-    Symbol,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 #[contracttype]
 pub enum DataKey {
@@ -25,13 +22,5 @@ impl TestContract {
 
     pub fn get_token(e: Env) -> Address {
         get_token(&e)
-    }
-
-    pub fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
-        TokenClient::new(&e, &get_token(&e)).approve(&from, &spender, &amount, &expiration_ledger);
-    }
-
-    pub fn allowance(e: Env, from: Address, spender: Address) -> i128 {
-        TokenClient::new(&e, &get_token(&e)).allowance(&from, &spender)
     }
 }
