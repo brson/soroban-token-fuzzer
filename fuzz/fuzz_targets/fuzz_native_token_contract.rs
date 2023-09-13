@@ -3,7 +3,7 @@
 
 use crate::arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
-use soroban_sdk::arbitrary::{arbitrary, fuzz_catch_panic, SorobanArbitrary};
+use soroban_sdk::arbitrary::{arbitrary, SorobanArbitrary};
 use soroban_sdk::testutils::{
     Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger, Logs, MockAuth, MockAuthInvoke,
 };
@@ -33,23 +33,6 @@ pub struct TestInput {
 }
 
 fuzz_target!(|input: TestInput| {
-    // todo tests:
-    // - more general token contract state assertions
-    // - approve allowance with non_zero amount with an expired ledger number and then transfer
-    // - approve allowance amount that is larger than admin/from's balance, and then transfer?
-    // - if allowance set to 0 if exipired
-    // - use transfer_from 2nd time for transfer the leftover amount (allowance_amount - transfer_amount)
-    // - error if transfer_from transfers the amount is more than allowance (allowance < admin's balance)
-    // - call transfer_from with a new user instead of approved spender
-    // - run the same transfer twice
-    // - more token_client methods:
-    //   - burn
-    //   - burn_from
-    // - more admin-client methods:
-    //   - set_admin
-    //   - set_authorized
-    //   - clawback
-
     let env = Env::default();
 
     // input value
@@ -76,21 +59,13 @@ fuzz_target!(|input: TestInput| {
 
     // mint
     {
-        let panic_r = fuzz_catch_panic(|| {
-            let _call_r = admin_client.mock_all_auths().try_mint(&admin, &mint_amount);
-        });
-
-        if panic_r.is_err() {
-            if !env.logs().all().is_empty() {
-                env.logs().print();
-            }
-            panic!("host panicked: {panic_r:?}");
+        let r = admin_client.mock_all_auths().try_mint(&admin, &mint_amount);
+        if r.is_ok() {
+            assert_eq!(mint_amount, token_client.balance(&admin));
+            assert_eq!(mint_amount, token_client.spendable_balance(&admin));
+            assert_eq!(0, token_client.balance(&spender));
+            assert_eq!(0, token_client.balance(&to));
         }
-
-        assert_eq!(mint_amount, token_client.balance(&admin));
-        assert_eq!(mint_amount, token_client.spendable_balance(&admin));
-        assert_eq!(0, token_client.balance(&spender));
-        assert_eq!(0, token_client.balance(&to));
     }
 
     // approve allowance and transfer_from
@@ -105,42 +80,29 @@ fuzz_target!(|input: TestInput| {
         // todo: test allowance_amount greater than from_balance
         //            && allowance_amount <= mint_amount
         {
-            let panic_r = fuzz_catch_panic(|| {
-                let _call_r = token_client.mock_all_auths().try_approve(
-                    &admin,
-                    &spender,
-                    &allowance_amount,
-                    &expiration_ledger,
-                );
-            });
+            let r = token_client.mock_all_auths().try_approve(
+                &admin,
+                &spender,
+                &allowance_amount,
+                &expiration_ledger,
+            );
 
-            if panic_r.is_err() {
-                if !env.logs().all().is_empty() {
-                    env.logs().print();
-                }
-                panic!("host panicked: {panic_r:?}");
+            if r.is_ok() {
+                assert_eq!(allowance_amount, token_client.allowance(&admin, &spender));
+            } else {
+                assert_eq!(0, token_client.allowance(&admin, &spender));
             }
-
-            assert_eq!(allowance_amount, token_client.allowance(&admin, &spender));
 
             // transfer_from
-            let panic_r = fuzz_catch_panic(|| {
-                token_client.mock_all_auths().try_transfer_from(
-                    &spender,
-                    &admin,
-                    &to,
-                    &transfer_amount,
-                );
-            });
-
-            if panic_r.is_err() {
-                if !env.logs().all().is_empty() {
-                    env.logs().print();
-                }
-                panic!("host panicked: {panic_r:?}");
-            }
+            let r = token_client.mock_all_auths().try_transfer_from(
+                &spender,
+                &admin,
+                &to,
+                &transfer_amount,
+            );
 
             if transfer_amount > allowance_amount || transfer_amount > mint_amount {
+                assert!(r.is_err());
                 assert_eq!(allowance_amount, token_client.allowance(&admin, &spender));
                 assert_eq!(0, token_client.balance(&to));
                 assert_eq!(mint_amount, token_client.balance(&admin));
@@ -160,36 +122,18 @@ fuzz_target!(|input: TestInput| {
                 let to_current_balance = token_client.balance(&to);
                 let current_allowance = token_client.allowance(&admin, &spender);
 
-                let panic_r = fuzz_catch_panic(|| {
-                    token_client.mock_all_auths().try_transfer_from(
-                        &spender,
-                        &admin,
-                        &to,
-                        &transfer_amount,
-                    );
-                });
-
-                if panic_r.is_err() {
-                    if !env.logs().all().is_empty() {
-                        env.logs().print();
-                    }
-                    panic!("host panicked: {panic_r:?}");
-                }
-
-                println!("balance: ");
-                println!("----- admin_before: {}", admin_current_balance);
-                println!("------ admin_after: {}", token_client.balance(&admin));
-                println!("-------- to_before: {}", to_current_balance);
-                println!("--------- to_after: {}", token_client.balance(&to));
-                println!("- allowance amount: {}", allowance_amount);
-                println!("- allowance before: {}", current_allowance);
-                println!(
-                    "-- allowance after: {}",
-                    token_client.allowance(&admin, &spender)
+                let r = token_client.mock_all_auths().try_transfer_from(
+                    &spender,
+                    &admin,
+                    &to,
+                    &transfer_amount,
                 );
 
-                if transfer_amount <= admin_current_balance && transfer_amount <= current_allowance
-                {
+                if transfer_amount > admin_current_balance || transfer_amount > current_allowance {
+                    assert!(r.is_err());
+                    assert_eq!(to_current_balance, token_client.balance(&to),);
+                    assert_eq!(admin_current_balance, token_client.balance(&admin),);
+                } else {
                     assert_eq!(
                         to_current_balance.checked_add(transfer_amount).unwrap(),
                         token_client.balance(&to),
@@ -198,9 +142,6 @@ fuzz_target!(|input: TestInput| {
                         admin_current_balance.checked_sub(transfer_amount).unwrap(),
                         token_client.balance(&admin),
                     );
-                } else {
-                    assert_eq!(to_current_balance, token_client.balance(&to),);
-                    assert_eq!(admin_current_balance, token_client.balance(&admin),);
                 }
             }
 
