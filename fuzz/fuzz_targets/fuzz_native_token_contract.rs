@@ -2,7 +2,7 @@
 #![allow(unused)]
 
 use crate::arbitrary::Unstructured;
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{fuzz_target, Corpus};
 use soroban_sdk::arbitrary::{arbitrary, SorobanArbitrary};
 use soroban_sdk::testutils::{
     Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger, Logs, MockAuth, MockAuthInvoke,
@@ -12,11 +12,15 @@ use soroban_sdk::{
     Address, Env, FromVal, IntoVal, String,
 };
 
-mod testcontract {
+/*mod testcontract {
     soroban_sdk::contractimport!(
         file = "../target/wasm32-unknown-unknown/release/fuzzing_native_token.wasm"
     );
-}
+}*/
+
+pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
+pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
+pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct TestInput {
@@ -33,10 +37,42 @@ pub struct TestInput {
     transfer_amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     burn_amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     expiration_ledger: u32,
 }
 
-fuzz_target!(|input: TestInput| {
+fn require_unique_addresses(addrs: &[&Address]) -> bool {
+    for addr1 in addrs {
+        let count = addrs.iter().filter(|a| a == &addr1).count();
+        if count > 1 {
+            return false;
+        }
+    }
+    true
+}
+
+fn advance_time_to(
+    env: &Env,
+    token_client: &Client,
+    to_ledger: u32,
+) {
+    loop {
+        let next_ledger = env.ledger().get().sequence_number.saturating_add(DAY_IN_LEDGERS);
+        let next_ledger = next_ledger.min(to_ledger);
+        env.ledger().with_mut(|li| {
+            li.sequence_number = next_ledger;
+        });
+        env.budget().reset_default();
+        // Keep the contract alive
+        let _ = token_client.try_allowance(&Address::random(env), &Address::random(env));
+        if next_ledger == to_ledger {
+            break;
+        }
+    }
+}
+
+fuzz_target!(|input: TestInput| -> Corpus {
+    println!("{input:#?}");
     let env = Env::default();
 
     // input value
@@ -51,10 +87,11 @@ fuzz_target!(|input: TestInput| {
     let burn_amount = input.burn_amount;
     let expiration_ledger = input.expiration_ledger;
 
-    // todo: arbitrary generates possibly the same addresses.
-    if admin.eq(&authorized_user) || admin.eq(&spender) {
-        return;
-    }
+    if !require_unique_addresses(&[
+        &admin, &authorized_user, &spender, &to_0, &to_1,
+    ]) {
+        return Corpus::Reject;
+    }        
 
     let token_contract_id = env.register_stellar_asset_contract(admin.clone());
     let admin_client = StellarAssetClient::new(&env, &token_contract_id);
@@ -273,6 +310,10 @@ fuzz_target!(|input: TestInput| {
 
         // transfer_from with authorized user
         let admin_pre_balance = token_client.balance(&admin);
+        let to_1_pre_balance = token_client.balance(&to_1);
+
+        println!("admin balance: {admin_pre_balance}");
+        println!("to_1 balance: {to_1_pre_balance}");
 
         let r = token_client.mock_all_auths().try_transfer_from(
             &authorized_user,
@@ -324,9 +365,9 @@ fuzz_target!(|input: TestInput| {
     // 0: [Diagnostic Event] topics:[error, Error(Storage, InternalError)], data:"escalating error to panic"
     // 1: [Diagnostic Event] topics:[error, Error(Storage, InternalError)], data:["contract try_call failed", allowance, [Address(Contract(fbefafafafafaf50af5050505050501c501c1c1c1c1c50505052505058500a50)), Address(Contract(5050505058500a50505050505050505250500a50505050505050505050505050))]]
     // 2: [Failed Diagnostic Event (not emitted)] contract:405bf28e12fa3d9188de103aa043dfb5847208759932aa39dd2dc4f2000cbc69, topics:[error, Error(Storage, InternalError)], data:["accessing expired entry", 120960, 5263439]
-    /*
+
     {
-        env.ledger().with_mut(|li| li.sequence_number = expiration_ledger.checked_add(1).unwrap());
+        advance_time_to(&env, &token_client, expiration_ledger.checked_add(1).unwrap());
 
         println!("******************************* after advancing ledger *******************************");
         let r = token_client.try_allowance(&admin, &spender);
@@ -336,5 +377,6 @@ fuzz_target!(|input: TestInput| {
             println!("---------------------- allowance_amount: {:?}", r.unwrap());
         }
     }
-    */
+
+    Corpus::Keep
 });
