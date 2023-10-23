@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+num-bigint = "0.4"
 soroban-ledger-snapshot = { path = "../../rs-soroban-sdk/soroban-ledger-snapshot" }
 soroban-sdk = { path = "../../rs-soroban-sdk/soroban-sdk", features = ["testutils"] }
 

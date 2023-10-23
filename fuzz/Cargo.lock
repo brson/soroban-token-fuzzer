@@ -434,6 +434,7 @@ version = "0.0.0"
 dependencies = [
  "fuzzing-native-token",
  "libfuzzer-sys",
+ "num-bigint",
  "soroban-ledger-snapshot",
  "soroban-sdk",
 ]
