@@ -7,25 +7,13 @@ edition = "2021"
 [package.metadata]
 cargo-fuzz = true
 
-[features]
-default = ["testutils"]
-testutils = ["soroban-sdk/testutils"]
-
 [dependencies]
 libfuzzer-sys = "0.4"
+soroban-ledger-snapshot = { path = "../../rs-soroban-sdk/soroban-ledger-snapshot" }
+soroban-sdk = { path = "../../rs-soroban-sdk/soroban-sdk", features = ["testutils"] }
 
 [dependencies.fuzzing-native-token]
 path = ".."
-
-[dependencies.soroban-sdk]
-path = "../../rs-soroban-sdk/soroban-sdk"
-
-[dependencies.soroban-env-common]
-path = "../../rs-soroban-env/soroban-env-common"
-
-[dev_dependencies.soroban-sdk]
-path = "../../rs-soroban-sdk/soroban-sdk"
-features = ["testutils"]
 
 [patch."https://github.com/stellar/rs-soroban-env"]
 soroban-env-common = { path = "../../rs-soroban-env/soroban-env-common" }
@@ -42,5 +30,11 @@ debug = 1
 [[bin]]
 name = "fuzz_native_token_contract"
 path = "fuzz_targets/fuzz_native_token_contract.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
 test = false
 doc = false
