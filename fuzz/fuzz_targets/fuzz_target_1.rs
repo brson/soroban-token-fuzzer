@@ -34,6 +34,8 @@ pub enum Command {
     Transfer(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
     BurnFrom(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
     Burn(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS))]
+    AdvanceTimeToLedger(u32),
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -72,6 +74,10 @@ fuzz_target!(|input: Input| -> Corpus {
 
     let mut contract_states = ContractStates::init();
 
+    // todo: remove the print line
+    println!("commands: {:?}", input.commands);
+
+    // todo: assert the same thing after every step
     for command in input.commands {
         match command {
             Command::Mint(amount) => {
@@ -205,6 +211,7 @@ fuzz_target!(|input: Input| -> Corpus {
                 }
                 assert_eq!(contract_states.admin_balance, token_client.balance(&admin));
             }
+            Command::AdvanceTimeToLedger(time) => advance_time_to(&env, &token_client, time),
         }
     }
 
