@@ -954,6 +954,7 @@ name = "soroban-env-host"
 version = "20.0.0-rc2"
 dependencies = [
  "backtrace",
+ "curve25519-dalek",
  "ed25519-dalek",
  "getrandom",
  "k256",
@@ -1109,7 +1110,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "20.0.0-rc1"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=d5ce0c9e7aa83461773a6e81662067f35d39e4c1#d5ce0c9e7aa83461773a6e81662067f35d39e4c1"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=9c97e4fa909a0b6455547a4f4a95800696b2a69a#9c97e4fa909a0b6455547a4f4a95800696b2a69a"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
