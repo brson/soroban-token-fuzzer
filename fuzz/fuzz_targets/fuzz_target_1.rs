@@ -20,25 +20,29 @@ use std::vec::Vec as RustVec;
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
 pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
+pub(crate) const NUMBER_OF_ADDRESSES: usize = 3;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct Input {
-    addresses: [<Address as SorobanArbitrary>::Prototype; 3],
+    addresses: [<Address as SorobanArbitrary>::Prototype; NUMBER_OF_ADDRESSES],
     commands: RustVec<Command>,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub enum Command {
-    Mint(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
+    Mint(MintInput),
     Approve(ApproveInput),
-    TransferFrom(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
-    Transfer(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
-    BurnFrom(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
-    Burn(#[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))] i128),
-    // todo: adjust the range
-    AdvanceLedgers(
-        #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS))] u32,
-    ),
+    TransferFrom(TransferFromInput),
+//    Transfer(TransferInput),
+//    BurnFrom(BurnFromInput),
+//    Burn(BurnInput),
+//    AdvanceLedgers(AdvanceLedgersInput),
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct MintInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
+    amount: i128,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -47,6 +51,31 @@ pub struct ApproveInput {
     allowance_amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     expiration_ledger: u32,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct TransferFromInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
+    amount: i128,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct BurnFromInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
+    amount: i128,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct BurnInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
+    amount: i128,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct AdvanceLedgersInput {
+    // todo: change the range
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS))]
+    ledgers: u32,
 }
 
 fuzz_target!(|input: Input| -> Corpus {
@@ -72,7 +101,7 @@ fuzz_target!(|input: Input| -> Corpus {
 
     let mut contract_state = ContractState::init();
 
-    println!("commands: {:#?}", input.commands);
+//    println!("commands: {:#?}", input.commands);
     for command in input.commands {
         // The Env may be different for each step, so we need to reconstruct
         // everything that depends on it.
@@ -84,20 +113,21 @@ fuzz_target!(|input: Input| -> Corpus {
         let token_contract_id = Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
         let admin_client = StellarAssetClient::new(&env, &token_contract_id);
         let token_client = Client::new(&env, &token_contract_id);
-
+        
         match command {
-            Command::Mint(amount) => {
-                let r = admin_client.try_mint(&admin, &amount);
+            Command::Mint(input) => {
+                let r = admin_client.try_mint(&admin, &input.amount);
+                println!("------------------------------- Mint r: {:#?} \n---------------------------", r);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
                             .admin_balance
-                            .checked_add(amount)
+                            .checked_add(input.amount)
                             .expect("Overflow");
 
                         contract_state.sum_of_mints = contract_state
                             .sum_of_mints
-                            .checked_add(&BigInt::from(amount))
+                            .checked_add(&BigInt::from(input.amount))
                             .expect("Overflow");
                     }
                 }
@@ -110,6 +140,7 @@ fuzz_target!(|input: Input| -> Corpus {
                     &input.allowance_amount,
                     &input.expiration_ledger,
                 );
+                println!("------------------------------- Approve r: {:#?} \n---------------------------", r);
 
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
@@ -123,22 +154,23 @@ fuzz_target!(|input: Input| -> Corpus {
                     token_client.allowance(&admin, &spender)
                 );
             }
-            Command::TransferFrom(amount) => {
+            Command::TransferFrom(input) => {
                 let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
                     .checked_add(&BigInt::from(token_client.balance(&to)))
                     .expect("Overflow");
 
-                let r = token_client.try_transfer_from(&spender, &admin, &to, &amount);
+                let r = token_client.try_transfer_from(&spender, &admin, &to, &input.amount);
+                println!("------------------------------- TransferFrom r: {:#?} \n---------------------------", r);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
                             .admin_balance
-                            .checked_sub(amount)
+                            .checked_sub(input.amount)
                             .expect("Overflow");
 
                         contract_state.allowance = contract_state
                             .allowance
-                            .checked_sub(amount)
+                            .checked_sub(input.amount)
                             .expect("Overflow");
                     }
                 }
@@ -154,17 +186,42 @@ fuzz_target!(|input: Input| -> Corpus {
                     token_client.allowance(&admin, &spender)
                 );
             }
-            Command::Transfer(amount) => {
-                let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
-                    .checked_add(&BigInt::from(token_client.balance(&to)))
-                    .expect("Overflow");
-
-                let r = token_client.try_transfer(&admin, &to, &amount);
+/*            Command::Transfer(input) => {
+                println!("Transfer command, mint first --------------------------------");
+                let r = admin_client.try_mint(&admin, &input.amount);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
                             .admin_balance
-                            .checked_sub(amount)
+                            .checked_add(999999999)
+                            .expect("Overflow");
+
+                        contract_state.sum_of_mints = contract_state
+                            .sum_of_mints
+                            .checked_add(&BigInt::from(999999999))
+                            .expect("Overflow");
+                    }
+                }
+                println!("approve ----------------------------------");
+                let r = token_client.try_approve(
+                    &admin,
+                    &spender,
+                    &99,
+                    &17280,
+                );
+
+                println!("before transfer ----------------------------------------");
+                let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
+                    .checked_add(&BigInt::from(token_client.balance(&to)))
+                    .expect("Overflow");
+
+                let r = token_client.try_transfer(&admin, &to, &input.amount);
+                println!("rrrrrrrrrrrrrrrr: {:#?}", r);
+                if r.is_ok() {
+                    if r.unwrap().is_ok() {
+                        contract_state.admin_balance = contract_state
+                            .admin_balance
+                            .checked_sub(input.amount)
                             .expect("Overflow");
                     }
                 }
@@ -176,23 +233,23 @@ fuzz_target!(|input: Input| -> Corpus {
                 assert_eq!(sum_of_balances_before, sum_of_balances_after);
                 assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
             }
-            Command::BurnFrom(amount) => {
-                let r = token_client.try_burn_from(&spender, &admin, &amount);
+            Command::BurnFrom(input) => {
+                let r = token_client.try_burn_from(&spender, &admin, &input.amount);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
                             .admin_balance
-                            .checked_sub(amount)
+                            .checked_sub(input.amount)
                             .expect("Overflow");
 
                         contract_state.sum_of_burns = contract_state
                             .sum_of_burns
-                            .checked_add(&BigInt::from(amount))
+                            .checked_add(&BigInt::from(input.amount))
                             .expect("Overflow");
 
                         contract_state.allowance = contract_state
                             .allowance
-                            .checked_sub(amount)
+                            .checked_sub(input.amount)
                             .expect("Overflow");
                     }
                 }
@@ -202,25 +259,25 @@ fuzz_target!(|input: Input| -> Corpus {
                     token_client.allowance(&admin, &spender)
                 );
             }
-            Command::Burn(amount) => {
-                let r = token_client.try_burn(&admin, &amount);
+            Command::Burn(input) => {
+                let r = token_client.try_burn(&admin, &input.amount);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
                             .admin_balance
-                            .checked_sub(amount)
+                            .checked_sub(input.amount)
                             .expect("Overflow");
 
                         contract_state.sum_of_burns = contract_state
                             .sum_of_burns
-                            .checked_add(&BigInt::from(amount))
+                            .checked_add(&BigInt::from(input.amount))
                             .expect("Overflow");
                     }
                 }
                 assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
             }
-            Command::AdvanceLedgers(ledgers) => {
-                let next_ledger = env.ledger().sequence().checked_add(ledgers).expect("end of time");
+            Command::AdvanceLedgers(input) => {
+                let next_ledger = env.ledger().sequence().checked_add(input.ledgers).expect("end of time");
                 env = advance_time_to(env, &token_contract_id_bytes, next_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
                 println!(
@@ -235,7 +292,7 @@ fuzz_target!(|input: Input| -> Corpus {
                 if env.ledger().sequence() > contract_state.expiration_ledger {
                     contract_state.allowance = 0;
                 }
-            }
+            }*/
         }
     }
 
