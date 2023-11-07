@@ -93,6 +93,10 @@ fuzz_target!(|input: Input| -> Corpus {
             return Corpus::Reject;
         }
 
+        if !require_contract_addresses(&[&admin, &spender, &to]) {
+            return Corpus::Reject;
+        }
+
         let token_contract_id_string = env.register_stellar_asset_contract(admin.clone()).to_string();
         let mut token_contract_id_buf = vec![0; token_contract_id_string.len() as usize];
         token_contract_id_string.copy_into_slice(&mut token_contract_id_buf);
@@ -324,6 +328,26 @@ fn require_unique_addresses(addrs: &[&Address]) -> bool {
         let count = addrs.iter().filter(|a| a == &addr1).count();
         if count > 1 {
             return false;
+        }
+    }
+    true
+}
+
+fn require_contract_addresses(addrs: &[&Address]) -> bool {
+    use stellar_strkey::*;
+    for addr in addrs {
+        let addr_string = addr.to_string();
+        let mut addr_buf = vec![0; addr_string.len() as usize];
+        addr_string.copy_into_slice(&mut addr_buf);
+        let addr_string = std::str::from_utf8(&addr_buf).unwrap();
+        let strkey = Strkey::from_string(&addr_string).unwrap();
+        match strkey {
+            Strkey::Contract(_) => {
+                
+            }
+            _ => {
+                return false;
+            }
         }
     }
     true
