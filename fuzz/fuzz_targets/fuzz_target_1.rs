@@ -111,12 +111,10 @@ fuzz_target!(|input: Input| -> Corpus {
 
     let mut contract_state = ContractState::init();
 
-    //    println!("commands: {:#?}", input.commands);
     for command in input.commands {
         // The Env may be different for each step, so we need to reconstruct
         // everything that depends on it.
-
-        // env.mock_all_auths();
+        env.mock_all_auths();
         let admin = Address::from_val(&env, &input.addresses[0]);
         let spender = Address::from_val(&env, &input.addresses[1]);
         let to = Address::from_val(&env, &input.addresses[2]);
@@ -126,6 +124,9 @@ fuzz_target!(|input: Input| -> Corpus {
         let admin_client = StellarAssetClient::new(&env, &token_contract_id);
         let token_client = Client::new(&env, &token_contract_id);
 
+        let current_state = CurrentState::from(admin.clone(), spender.clone(), to.clone());
+        
+        println!("------- command: {:#?}\n--------", command);
         match command {
             Command::Mint(input) => {
                 let r = admin_client.try_mint(&admin, &input.amount);
@@ -136,13 +137,11 @@ fuzz_target!(|input: Input| -> Corpus {
                             .checked_add(input.amount)
                             .expect("Overflow");
 
-                        contract_state.sum_of_mints = contract_state
-                            .sum_of_mints
+                        contract_state.sum_of_mints = contract_state.sum_of_mints
                             .checked_add(&BigInt::from(input.amount))
                             .expect("Overflow");
                     }
                 }
-                assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
             }
             Command::Approve(input) => {
                 let r = token_client.try_approve(
@@ -159,10 +158,6 @@ fuzz_target!(|input: Input| -> Corpus {
                     }
                 }
 
-                assert_eq!(
-                    contract_state.allowance,
-                    token_client.allowance(&admin, &spender)
-                );
             }
             Command::TransferFrom(input) => {
                 let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
@@ -190,28 +185,8 @@ fuzz_target!(|input: Input| -> Corpus {
                     .expect("Overflow");
 
                 assert_eq!(sum_of_balances_before, sum_of_balances_after);
-                assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
-                assert_eq!(
-                    contract_state.allowance,
-                    token_client.allowance(&admin, &spender)
-                );
             }
             Command::Transfer(input) => {
-                let r = admin_client.try_mint(&admin, &input.amount);
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_add(999999999)
-                            .expect("Overflow");
-
-                        contract_state.sum_of_mints = contract_state
-                            .sum_of_mints
-                            .checked_add(&BigInt::from(999999999))
-                            .expect("Overflow");
-                    }
-                }
-
                 let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
                     .checked_add(&BigInt::from(token_client.balance(&to)))
                     .expect("Overflow");
@@ -232,7 +207,6 @@ fuzz_target!(|input: Input| -> Corpus {
                     .expect("Overflow");
 
                 assert_eq!(sum_of_balances_before, sum_of_balances_after);
-                assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
             }
             Command::BurnFrom(input) => {
                 let r = token_client.try_burn_from(&spender, &admin, &input.amount);
@@ -254,11 +228,6 @@ fuzz_target!(|input: Input| -> Corpus {
                             .expect("Overflow");
                     }
                 }
-                assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
-                assert_eq!(
-                    contract_state.allowance,
-                    token_client.allowance(&admin, &spender)
-                );
             }
             Command::Burn(input) => {
                 let r = token_client.try_burn(&admin, &input.amount);
@@ -275,7 +244,6 @@ fuzz_target!(|input: Input| -> Corpus {
                             .expect("Overflow");
                     }
                 }
-                assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
             }
             Command::AdvanceLedgers(input) => {
                 let to_ledger = env
@@ -283,7 +251,7 @@ fuzz_target!(|input: Input| -> Corpus {
                     .sequence()
                     .checked_add(input.ledgers)
                     .expect("end of time");
-                let to_ledger = to_ledger.min(INSTANCE_BUMP_AMOUNT);
+
                 env = advance_time_to(env, &token_contract_id_bytes, to_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
                 if env.ledger().sequence() > contract_state.expiration_ledger {
@@ -291,6 +259,8 @@ fuzz_target!(|input: Input| -> Corpus {
                 }
             }
         }
+
+        assert_state(&token_client, &contract_state, &current_state);
     }
 
     Corpus::Keep
@@ -314,6 +284,38 @@ impl ContractState {
             sum_of_burns: BigInt::default(),
         }
     }
+}
+
+struct CurrentState {
+    admin: Address,
+    spender: Address,
+    to: Address,
+}
+
+impl CurrentState {
+    fn from(
+        admin: Address,
+        spender: Address,
+        to: Address,
+    ) -> Self {
+        CurrentState {
+            admin,
+            spender,
+            to,
+        }
+    }
+}
+
+fn assert_state(token_client: &Client, contract: &ContractState, current: &CurrentState) {
+    assert_eq!(
+        contract.admin_balance,
+        token_client.balance(&current.admin)
+    );
+
+    assert_eq!(
+        contract.allowance,
+        token_client.allowance(&current.admin, &current.spender)
+    );
 }
 
 fn require_unique_addresses(addrs: &[&Address]) -> bool {
@@ -389,11 +391,6 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
 fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32) -> Env {
     loop {
         let curr_ledger = env.ledger().get().sequence_number;
-
-        if curr_ledger == to_ledger {
-            break;
-        }
-
         assert!(curr_ledger < to_ledger);
 
         let next_ledger = curr_ledger
