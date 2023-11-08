@@ -11,9 +11,8 @@ use soroban_sdk::testutils::{
     MockAuthInvoke,
 };
 use soroban_sdk::{
-    Bytes,
     token::{Client, StellarAssetClient},
-    Address, Env, FromVal, IntoVal, String,
+    Address, Bytes, Env, FromVal, IntoVal, String,
 };
 use std::vec::Vec as RustVec;
 
@@ -33,10 +32,10 @@ pub enum Command {
     Mint(MintInput),
     Approve(ApproveInput),
     TransferFrom(TransferFromInput),
-//    Transfer(TransferInput),
-//    BurnFrom(BurnFromInput),
-//    Burn(BurnInput),
-//    AdvanceLedgers(AdvanceLedgersInput),
+    Transfer(TransferInput),
+    BurnFrom(BurnFromInput),
+    Burn(BurnInput),
+    AdvanceLedgers(AdvanceLedgersInput),
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -60,6 +59,12 @@ pub struct TransferFromInput {
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct TransferInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
+    amount: i128,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct BurnFromInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     amount: i128,
@@ -73,8 +78,7 @@ pub struct BurnInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct AdvanceLedgersInput {
-    // todo: change the range
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS))]
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(1..=DAY_IN_LEDGERS))]
     ledgers: u32,
 }
 
@@ -97,7 +101,9 @@ fuzz_target!(|input: Input| -> Corpus {
             return Corpus::Reject;
         }
 
-        let token_contract_id_string = env.register_stellar_asset_contract(admin.clone()).to_string();
+        let token_contract_id_string = env
+            .register_stellar_asset_contract(admin.clone())
+            .to_string();
         let mut token_contract_id_buf = vec![0; token_contract_id_string.len() as usize];
         token_contract_id_string.copy_into_slice(&mut token_contract_id_buf);
         token_contract_id_bytes = token_contract_id_buf
@@ -105,23 +111,24 @@ fuzz_target!(|input: Input| -> Corpus {
 
     let mut contract_state = ContractState::init();
 
-//    println!("commands: {:#?}", input.commands);
+    //    println!("commands: {:#?}", input.commands);
     for command in input.commands {
         // The Env may be different for each step, so we need to reconstruct
         // everything that depends on it.
 
+        // env.mock_all_auths();
         let admin = Address::from_val(&env, &input.addresses[0]);
         let spender = Address::from_val(&env, &input.addresses[1]);
         let to = Address::from_val(&env, &input.addresses[2]);
 
-        let token_contract_id = Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
+        let token_contract_id =
+            Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
         let admin_client = StellarAssetClient::new(&env, &token_contract_id);
         let token_client = Client::new(&env, &token_contract_id);
-        
+
         match command {
             Command::Mint(input) => {
                 let r = admin_client.try_mint(&admin, &input.amount);
-                println!("------------------------------- Mint r: {:#?} \n---------------------------", r);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
@@ -144,7 +151,6 @@ fuzz_target!(|input: Input| -> Corpus {
                     &input.allowance_amount,
                     &input.expiration_ledger,
                 );
-                println!("------------------------------- Approve r: {:#?} \n---------------------------", r);
 
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
@@ -164,7 +170,7 @@ fuzz_target!(|input: Input| -> Corpus {
                     .expect("Overflow");
 
                 let r = token_client.try_transfer_from(&spender, &admin, &to, &input.amount);
-                println!("------------------------------- TransferFrom r: {:#?} \n---------------------------", r);
+
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
@@ -190,8 +196,7 @@ fuzz_target!(|input: Input| -> Corpus {
                     token_client.allowance(&admin, &spender)
                 );
             }
-/*            Command::Transfer(input) => {
-                println!("Transfer command, mint first --------------------------------");
+            Command::Transfer(input) => {
                 let r = admin_client.try_mint(&admin, &input.amount);
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
@@ -206,21 +211,13 @@ fuzz_target!(|input: Input| -> Corpus {
                             .expect("Overflow");
                     }
                 }
-                println!("approve ----------------------------------");
-                let r = token_client.try_approve(
-                    &admin,
-                    &spender,
-                    &99,
-                    &17280,
-                );
 
-                println!("before transfer ----------------------------------------");
                 let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
                     .checked_add(&BigInt::from(token_client.balance(&to)))
                     .expect("Overflow");
 
                 let r = token_client.try_transfer(&admin, &to, &input.amount);
-                println!("rrrrrrrrrrrrrrrr: {:#?}", r);
+
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.admin_balance = contract_state
@@ -281,22 +278,18 @@ fuzz_target!(|input: Input| -> Corpus {
                 assert_eq!(contract_state.admin_balance, token_client.balance(&admin));
             }
             Command::AdvanceLedgers(input) => {
-                let next_ledger = env.ledger().sequence().checked_add(input.ledgers).expect("end of time");
-                env = advance_time_to(env, &token_contract_id_bytes, next_ledger);
+                let to_ledger = env
+                    .ledger()
+                    .sequence()
+                    .checked_add(input.ledgers)
+                    .expect("end of time");
+                let to_ledger = to_ledger.min(INSTANCE_BUMP_AMOUNT);
+                env = advance_time_to(env, &token_contract_id_bytes, to_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
-                println!(
-                    "-- ledger after advance_time_to: {}",
-                    env.ledger().sequence()
-                );
-                println!(
-                    "-- contract_state.expiration_ledger: {}",
-                    contract_state.expiration_ledger
-                );
-                println!("-        state allowance: {}", contract_state.allowance);
                 if env.ledger().sequence() > contract_state.expiration_ledger {
                     contract_state.allowance = 0;
                 }
-            }*/
+            }
         }
     }
 
@@ -342,9 +335,7 @@ fn require_contract_addresses(addrs: &[&Address]) -> bool {
         let addr_string = std::str::from_utf8(&addr_buf).unwrap();
         let strkey = Strkey::from_string(&addr_string).unwrap();
         match strkey {
-            Strkey::Contract(_) => {
-                
-            }
+            Strkey::Contract(_) => {}
             _ => {
                 return false;
             }
@@ -365,12 +356,20 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
         let ledgers_per_day = DAY_IN_LEDGERS as u64;
         secs_per_day / ledgers_per_day
     };
-    let ledger_time = secs_per_ledger.checked_mul(ledgers as u64).expect("end of time");
+    let ledger_time = secs_per_ledger
+        .checked_mul(ledgers as u64)
+        .expect("end of time");
 
     let mut env = prev_env.clone();
     env.ledger().with_mut(|ledger| {
-        ledger.sequence_number = ledger.sequence_number.checked_add(ledgers).expect("end of time");
-        ledger.timestamp = ledger.timestamp.checked_add(ledger_time).expect("end of time");
+        ledger.sequence_number = ledger
+            .sequence_number
+            .checked_add(ledgers)
+            .expect("end of time");
+        ledger.timestamp = ledger
+            .timestamp
+            .checked_add(ledger_time)
+            .expect("end of time");
     });
 
     env
@@ -385,15 +384,23 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
     env*/
 }
 
-/// Advance time, but do it in increments, periodically pinging the controct to
+/// Advance time, but do it in increments, periodically pinging the contract to
 /// keep it alive.
 fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32) -> Env {
     loop {
         let curr_ledger = env.ledger().get().sequence_number;
+
+        if curr_ledger == to_ledger {
+            break;
+        }
+
         assert!(curr_ledger < to_ledger);
 
-        let next_ledger = curr_ledger.checked_add(DAY_IN_LEDGERS).expect("end of time");
+        let next_ledger = curr_ledger
+            .checked_add(DAY_IN_LEDGERS)
+            .expect("end of time");
         let next_ledger = next_ledger.min(to_ledger);
+
         let advance_ledgers = next_ledger - curr_ledger;
 
         env = advance_env(env, advance_ledgers);
@@ -402,7 +409,8 @@ fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32)
             break;
         } else {
             // Keep the contract alive
-            let token_contract_id = Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
+            let token_contract_id =
+                Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
             let token_client = Client::new(&env, &token_contract_id);
             let _ = token_client.try_allowance(&Address::random(&env), &Address::random(&env));
         }
