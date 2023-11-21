@@ -125,7 +125,7 @@ fuzz_target!(|input: Input| -> Corpus {
         let token_client = Client::new(&env, &token_contract_id);
 
         let current_state = CurrentState::from(admin.clone(), spender.clone(), to.clone());
-        
+
         println!("------- command: {:#?}\n--------", command);
         match command {
             Command::Mint(input) => {
@@ -137,7 +137,8 @@ fuzz_target!(|input: Input| -> Corpus {
                             .checked_add(input.amount)
                             .expect("Overflow");
 
-                        contract_state.sum_of_mints = contract_state.sum_of_mints
+                        contract_state.sum_of_mints = contract_state
+                            .sum_of_mints
                             .checked_add(&BigInt::from(input.amount))
                             .expect("Overflow");
                     }
@@ -245,7 +246,8 @@ fuzz_target!(|input: Input| -> Corpus {
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
                 // update saved allowance number after advance ledgers
-                contract_state.allowance = token_client.allowance(&current_state.admin, &current_state.spender);
+                contract_state.allowance =
+                    token_client.allowance(&current_state.admin, &current_state.spender);
             }
         }
 
@@ -281,41 +283,30 @@ struct CurrentState {
 }
 
 impl CurrentState {
-    fn from(
-        admin: Address,
-        spender: Address,
-        to: Address,
-    ) -> Self {
-        CurrentState {
-            admin,
-            spender,
-            to,
-        }
+    fn from(admin: Address, spender: Address, to: Address) -> Self {
+        CurrentState { admin, spender, to }
     }
 }
 
 fn assert_state(token_client: &Client, contract: &ContractState, current: &CurrentState) {
-    assert_eq!(
-        contract.admin_balance,
-        token_client.balance(&current.admin)
-    );
+    assert_eq!(contract.admin_balance, token_client.balance(&current.admin));
 
     assert_eq!(
         contract.allowance,
         token_client.allowance(&current.admin, &current.spender)
     );
 
-    let sum_of_balances_0 = contract.sum_of_mints.checked_sub(&contract.sum_of_burns).expect("Overflow");
+    let sum_of_balances_0 = contract
+        .sum_of_mints
+        .checked_sub(&contract.sum_of_burns)
+        .expect("Overflow");
     let sum_of_balances_1 = BigInt::from(token_client.balance(&current.admin))
         .checked_add(&BigInt::from(token_client.balance(&current.spender)))
         .expect("Overflow")
         .checked_add(&BigInt::from(token_client.balance(&current.to)))
         .expect("Overflow");
-    
-    assert_eq!(
-        sum_of_balances_0,
-        sum_of_balances_1,
-    );
+
+    assert_eq!(sum_of_balances_0, sum_of_balances_1,);
 }
 
 fn require_unique_addresses(addrs: &[&Address]) -> bool {
