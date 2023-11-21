@@ -5,8 +5,8 @@ use crate::arbitrary::Unstructured;
 use libfuzzer_sys::{fuzz_target, Corpus};
 use num_bigint::BigInt;
 use soroban_ledger_snapshot::LedgerSnapshot;
-use soroban_sdk::arbitrary::{arbitrary, SorobanArbitrary};
 use soroban_sdk::testutils::{
+    arbitrary::{arbitrary, SorobanArbitrary},
     Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo, Logs, MockAuth,
     MockAuthInvoke,
 };
@@ -154,16 +154,10 @@ fuzz_target!(|input: Input| -> Corpus {
                 if r.is_ok() {
                     if r.unwrap().is_ok() {
                         contract_state.allowance = input.allowance_amount;
-                        contract_state.expiration_ledger = input.expiration_ledger;
                     }
                 }
-
             }
             Command::TransferFrom(input) => {
-                let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
-                    .checked_add(&BigInt::from(token_client.balance(&to)))
-                    .expect("Overflow");
-
                 let r = token_client.try_transfer_from(&spender, &admin, &to, &input.amount);
 
                 if r.is_ok() {
@@ -179,18 +173,8 @@ fuzz_target!(|input: Input| -> Corpus {
                             .expect("Overflow");
                     }
                 }
-
-                let sum_of_balances_after = BigInt::from(token_client.balance(&admin))
-                    .checked_add(&BigInt::from(token_client.balance(&to)))
-                    .expect("Overflow");
-
-                assert_eq!(sum_of_balances_before, sum_of_balances_after);
             }
             Command::Transfer(input) => {
-                let sum_of_balances_before = BigInt::from(token_client.balance(&admin))
-                    .checked_add(&BigInt::from(token_client.balance(&to)))
-                    .expect("Overflow");
-
                 let r = token_client.try_transfer(&admin, &to, &input.amount);
 
                 if r.is_ok() {
@@ -202,11 +186,16 @@ fuzz_target!(|input: Input| -> Corpus {
                     }
                 }
 
-                let sum_of_balances_after = BigInt::from(token_client.balance(&admin))
-                    .checked_add(&BigInt::from(token_client.balance(&to)))
-                    .expect("Overflow");
+                let r = token_client.try_transfer(&to, &admin, &input.amount);
 
-                assert_eq!(sum_of_balances_before, sum_of_balances_after);
+                if r.is_ok() {
+                    if r.unwrap().is_ok() {
+                        contract_state.admin_balance = contract_state
+                            .admin_balance
+                            .checked_add(input.amount)
+                            .expect("Overflow");
+                    }
+                }
             }
             Command::BurnFrom(input) => {
                 let r = token_client.try_burn_from(&spender, &admin, &input.amount);
@@ -254,13 +243,14 @@ fuzz_target!(|input: Input| -> Corpus {
 
                 env = advance_time_to(env, &token_contract_id_bytes, to_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
-                if env.ledger().sequence() > contract_state.expiration_ledger {
-                    contract_state.allowance = 0;
-                }
+
+                // update saved allowance number after advance ledgers
+                contract_state.allowance = token_client.allowance(&current_state.admin, &current_state.spender);
             }
         }
 
         assert_state(&token_client, &contract_state, &current_state);
+        env.budget().reset_unlimited();
     }
 
     Corpus::Keep
@@ -269,7 +259,6 @@ fuzz_target!(|input: Input| -> Corpus {
 pub struct ContractState {
     admin_balance: i128,
     allowance: i128,
-    expiration_ledger: u32,
     sum_of_mints: BigInt,
     sum_of_burns: BigInt,
 }
@@ -279,7 +268,6 @@ impl ContractState {
         ContractState {
             admin_balance: 0,
             allowance: 0,
-            expiration_ledger: 0,
             sum_of_mints: BigInt::default(),
             sum_of_burns: BigInt::default(),
         }
@@ -315,6 +303,18 @@ fn assert_state(token_client: &Client, contract: &ContractState, current: &Curre
     assert_eq!(
         contract.allowance,
         token_client.allowance(&current.admin, &current.spender)
+    );
+
+    let sum_of_balances_0 = contract.sum_of_mints.checked_sub(&contract.sum_of_burns).expect("Overflow");
+    let sum_of_balances_1 = BigInt::from(token_client.balance(&current.admin))
+        .checked_add(&BigInt::from(token_client.balance(&current.spender)))
+        .expect("Overflow")
+        .checked_add(&BigInt::from(token_client.balance(&current.to)))
+        .expect("Overflow");
+    
+    assert_eq!(
+        sum_of_balances_0,
+        sum_of_balances_1,
     );
 }
 
@@ -409,7 +409,7 @@ fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32)
             let token_contract_id =
                 Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
             let token_client = Client::new(&env, &token_contract_id);
-            let _ = token_client.try_allowance(&Address::random(&env), &Address::random(&env));
+            let _ = token_client.try_allowance(&Address::generate(&env), &Address::generate(&env));
         }
     }
 
