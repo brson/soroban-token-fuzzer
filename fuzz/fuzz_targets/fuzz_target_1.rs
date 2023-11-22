@@ -15,6 +15,8 @@ use soroban_sdk::{
     Address, Bytes, Env, FromVal, IntoVal, String,
 };
 use std::vec::Vec as RustVec;
+use std::collections::BTreeMap;
+use itertools::Itertools;
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
@@ -42,6 +44,8 @@ pub enum Command {
 pub struct MintInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    to_account_index: usize,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -50,30 +54,50 @@ pub struct ApproveInput {
     allowance_amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     expiration_ledger: u32,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    spender_account_index: usize,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct TransferFromInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    spender_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    to_account_index: usize,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct TransferInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    to_account_index: usize,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct BurnFromInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    spender_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    from_account_index: usize,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct BurnInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=i128::MAX))]
     amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    from_account_index: usize,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -83,6 +107,11 @@ pub struct AdvanceLedgersInput {
 }
 
 fuzz_target!(|input: Input| -> Corpus {
+    if input.commands.is_empty() {
+        return Corpus::Reject;
+    }
+
+    //eprintln!("input: {input:#?}");
     let mut env = create_env();
 
     let token_contract_id_bytes: RustVec<u8>;
@@ -90,177 +119,225 @@ fuzz_target!(|input: Input| -> Corpus {
     // Do initial setup, including registering the contract.
     {
         let admin = Address::from_val(&env, &input.addresses[0]);
-        let spender = Address::from_val(&env, &input.addresses[1]);
-        let to = Address::from_val(&env, &input.addresses[2]);
+        let accounts = input.addresses.iter().map(|a| {
+            Address::from_val(&env, a)
+        }).collect::<Vec<_>>();
 
-        if !require_unique_addresses(&[&admin, &spender, &to]) {
+        if !require_unique_addresses(&accounts) {
             return Corpus::Reject;
         }
 
-        if !require_contract_addresses(&[&admin, &spender, &to]) {
+        if !require_contract_addresses(&accounts) {
             return Corpus::Reject;
         }
 
-        let token_contract_id_string = env
-            .register_stellar_asset_contract(admin.clone())
-            .to_string();
-        let mut token_contract_id_buf = vec![0; token_contract_id_string.len() as usize];
-        token_contract_id_string.copy_into_slice(&mut token_contract_id_buf);
-        token_contract_id_bytes = token_contract_id_buf
+        let token_contract_id = env
+            .register_stellar_asset_contract(admin.clone());
+        token_contract_id_bytes = address_to_bytes(&token_contract_id);
     }
 
     let mut contract_state = ContractState::init();
+    let mut current_state = CurrentState::new(&env, &input.addresses, &token_contract_id_bytes);
+
+    let mut results: Vec<(&'static str, bool)> = vec![];
+
+    let mut log_result = |name, r: &Result<_, _>| {
+        results.push((name, r.is_ok()));
+    };
 
     for command in input.commands {
         // The Env may be different for each step, so we need to reconstruct
         // everything that depends on it.
         env.mock_all_auths();
-        let admin = Address::from_val(&env, &input.addresses[0]);
-        let spender = Address::from_val(&env, &input.addresses[1]);
-        let to = Address::from_val(&env, &input.addresses[2]);
+        env.budget().reset_unlimited();
 
-        let token_contract_id =
-            Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
-        let admin_client = StellarAssetClient::new(&env, &token_contract_id);
-        let token_client = Client::new(&env, &token_contract_id);
+        let admin_client = &current_state.admin_client;
+        let token_client = &current_state.token_client;
+        let accounts = &current_state.accounts;
 
-        let current_state = CurrentState::from(admin.clone(), spender.clone(), to.clone());
-
-        println!("------- command: {:#?}\n--------", command);
+        //println!("------- command: {:#?}\n--------", command);
         match command {
             Command::Mint(input) => {
-                let r = admin_client.try_mint(&admin, &input.amount);
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_add(input.amount)
-                            .expect("Overflow");
+                let r = admin_client.try_mint(
+                    &accounts[input.to_account_index],
+                    &input.amount
+                );
 
-                        contract_state.sum_of_mints = contract_state
-                            .sum_of_mints
-                            .checked_add(&BigInt::from(input.amount))
-                            .expect("Overflow");
-                    }
+                log_result("mint", &r);
+
+                if let Ok(r) = r {
+                    let r = r.unwrap();
+
+                    contract_state.add_balance(
+                        &accounts[input.to_account_index],
+                        input.amount
+                    );
+
+                    contract_state.sum_of_mints = contract_state
+                        .sum_of_mints
+                        .checked_add(&BigInt::from(input.amount))
+                        .expect("Overflow");
                 }
             }
             Command::Approve(input) => {
                 let r = token_client.try_approve(
-                    &admin,
-                    &spender,
+                    &accounts[input.from_account_index],
+                    &accounts[input.spender_account_index],
                     &input.allowance_amount,
                     &input.expiration_ledger,
                 );
 
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.allowance = input.allowance_amount;
-                    }
+                log_result("approve", &r);
+
+                if let Ok(r) = r {
+                    let r = r.unwrap();
+
+                    contract_state.set_allowance(
+                        &accounts[input.from_account_index],
+                        &accounts[input.spender_account_index],
+                        input.allowance_amount);
                 }
             }
             Command::TransferFrom(input) => {
-                let r = token_client.try_transfer_from(&spender, &admin, &to, &input.amount);
+                let r = token_client.try_transfer_from(
+                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index],
+                    &accounts[input.to_account_index],
+                    &input.amount
+                );
 
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_sub(input.amount)
-                            .expect("Overflow");
+                log_result("transfer_from", &r);
 
-                        contract_state.allowance = contract_state
-                            .allowance
-                            .checked_sub(input.amount)
-                            .expect("Overflow");
-                    }
+                if let Ok(r) = r {
+                    let r = r.unwrap();
+
+                    contract_state.sub_balance(
+                        &accounts[input.from_account_index],
+                        input.amount
+                    );
+                    contract_state.add_balance(
+                        &accounts[input.to_account_index],
+                        input.amount
+                    );
+
+                    contract_state.sub_allowance(
+                        &accounts[input.from_account_index],
+                        &accounts[input.spender_account_index],
+                        input.amount,
+                    );
                 }
             }
             Command::Transfer(input) => {
-                let r = token_client.try_transfer(&admin, &to, &input.amount);
+                let r = token_client.try_transfer(
+                    &accounts[input.from_account_index],
+                    &accounts[input.to_account_index],
+                    &input.amount
+                );
 
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_sub(input.amount)
-                            .expect("Overflow");
-                    }
-                }
+                log_result("transfer", &r);
 
-                let r = token_client.try_transfer(&to, &admin, &input.amount);
-
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_add(input.amount)
-                            .expect("Overflow");
-                    }
+                if let Ok(r) = r {
+                    let r = r.unwrap();
+                    
+                    contract_state.sub_balance(
+                        &accounts[input.from_account_index],
+                        input.amount
+                    );
+                    contract_state.add_balance(
+                        &accounts[input.to_account_index],
+                        input.amount
+                    );
                 }
             }
             Command::BurnFrom(input) => {
-                let r = token_client.try_burn_from(&spender, &admin, &input.amount);
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_sub(input.amount)
-                            .expect("Overflow");
+                let r = token_client.try_burn_from(
+                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index],
+                    &input.amount
+                );
 
-                        contract_state.sum_of_burns = contract_state
-                            .sum_of_burns
-                            .checked_add(&BigInt::from(input.amount))
-                            .expect("Overflow");
+                log_result("burn_from", &r);
 
-                        contract_state.allowance = contract_state
-                            .allowance
-                            .checked_sub(input.amount)
-                            .expect("Overflow");
-                    }
+                if let Ok(r) = r {
+                    let r = r.unwrap();
+
+                    contract_state.sub_balance(
+                        &accounts[input.from_account_index],
+                        input.amount
+                    );
+
+                    contract_state.sub_allowance(
+                        &accounts[input.from_account_index],
+                        &accounts[input.spender_account_index],
+                        input.amount
+                    );
+
+                    contract_state.sum_of_burns = contract_state
+                        .sum_of_burns
+                        .checked_add(&BigInt::from(input.amount))
+                        .expect("Overflow");
                 }
             }
             Command::Burn(input) => {
-                let r = token_client.try_burn(&admin, &input.amount);
-                if r.is_ok() {
-                    if r.unwrap().is_ok() {
-                        contract_state.admin_balance = contract_state
-                            .admin_balance
-                            .checked_sub(input.amount)
-                            .expect("Overflow");
+                let r = token_client.try_burn(
+                    &accounts[input.from_account_index],
+                    &input.amount
+                );
 
-                        contract_state.sum_of_burns = contract_state
-                            .sum_of_burns
-                            .checked_add(&BigInt::from(input.amount))
-                            .expect("Overflow");
-                    }
+                log_result("burn", &r);
+
+                if let Ok(r) = r {
+                    let r = r.unwrap();
+
+                    contract_state.sub_balance(
+                        &accounts[input.from_account_index],
+                        input.amount
+                    );
+
+                    contract_state.sum_of_burns = contract_state
+                        .sum_of_burns
+                        .checked_add(&BigInt::from(input.amount))
+                        .expect("Overflow");
                 }
             }
-            Command::AdvanceLedgers(input) => {
+            Command::AdvanceLedgers(cmd_input) => {
                 let to_ledger = env
                     .ledger()
                     .sequence()
-                    .checked_add(input.ledgers)
+                    .checked_add(cmd_input.ledgers)
                     .expect("end of time");
 
                 env = advance_time_to(env, &token_contract_id_bytes, to_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
+                current_state = CurrentState::new(&env, &input.addresses, &token_contract_id_bytes);
+
                 // update saved allowance number after advance ledgers
-                contract_state.allowance =
-                    token_client.allowance(&current_state.admin, &current_state.spender);
+                // fixme track expiration ledger instead of asking the contract
+                {
+                    let pairs = current_state.accounts.iter()
+                        .cartesian_product(current_state.accounts.iter());
+                    for (addr1, addr2) in pairs {
+                        contract_state.set_allowance(
+                            addr1, addr2,
+                            current_state.token_client.allowance(addr1, addr2),
+                        );
+                    }
+                }
             }
         }
 
-        assert_state(&token_client, &contract_state, &current_state);
-        env.budget().reset_unlimited();
+        assert_state(&contract_state, &current_state);
     }
+
+    eprintln!("results: {results:?}");
 
     Corpus::Keep
 });
 
 pub struct ContractState {
-    admin_balance: i128,
-    allowance: i128,
+    balances: BTreeMap<RustVec<u8>, i128>,
+    allowances: BTreeMap<(RustVec<u8>, RustVec<u8>), i128>, // (from, spender)
     sum_of_mints: BigInt,
     sum_of_burns: BigInt,
 }
@@ -268,48 +345,133 @@ pub struct ContractState {
 impl ContractState {
     fn init() -> Self {
         ContractState {
-            admin_balance: 0,
-            allowance: 0,
+            balances: BTreeMap::default(),
+            allowances: BTreeMap::default(),
             sum_of_mints: BigInt::default(),
             sum_of_burns: BigInt::default(),
         }
     }
-}
 
-struct CurrentState {
-    admin: Address,
-    spender: Address,
-    to: Address,
-}
+    fn get_balance(&self, addr: &Address) -> i128 {
+        let addr_bytes = address_to_bytes(addr);
+        self.balances.get(&addr_bytes).copied().unwrap_or(0)
+    }
 
-impl CurrentState {
-    fn from(admin: Address, spender: Address, to: Address) -> Self {
-        CurrentState { admin, spender, to }
+    fn sub_balance(&mut self, addr: &Address, amount: i128) {
+        let addr_bytes = address_to_bytes(addr);
+        let balance = self.get_balance(addr);
+        let new_balance = balance.checked_sub(amount).expect("overflow");
+        assert!(new_balance >= 0);
+        self.balances.insert(addr_bytes, new_balance);
+    }
+
+    fn add_balance(&mut self, addr: &Address, amount: i128) {
+        let addr_bytes = address_to_bytes(addr);
+        let balance = self.get_balance(addr);
+        let new_balance = balance.checked_add(amount).expect("overflow");
+        assert!(new_balance >= 0);
+        self.balances.insert(addr_bytes, new_balance);
+    }
+
+    fn set_allowance(
+        &mut self,
+        from: &Address,
+        spender: &Address,
+        amount: i128
+    ) {
+        assert!(amount >= 0);
+        let from_bytes = address_to_bytes(from);
+        let spender_bytes = address_to_bytes(spender);
+        self.allowances.insert(
+            (from_bytes, spender_bytes),
+            amount
+        );
+    }
+
+    fn get_allowance(
+        &self,
+        from: &Address,
+        spender: &Address,
+    ) -> i128 {
+        let from_bytes = address_to_bytes(from);
+        let spender_bytes = address_to_bytes(spender);
+        self.allowances.get(&(from_bytes, spender_bytes))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    fn sub_allowance(
+        &mut self,
+        from: &Address,
+        spender: &Address,
+        amount: i128,
+    ) {
+        let allowance = self.get_allowance(from, spender);
+        let new_allowance = allowance.checked_sub(amount).expect("overflow");
+        assert!(new_allowance >= 0);
+        self.set_allowance(from, spender, new_allowance);
     }
 }
 
-fn assert_state(token_client: &Client, contract: &ContractState, current: &CurrentState) {
-    assert_eq!(contract.admin_balance, token_client.balance(&current.admin));
+struct CurrentState<'a> {
+    admin: Address,
+    accounts: Vec<Address>,
+    admin_client: StellarAssetClient<'a>,
+    token_client: Client<'a>,
+}
 
-    assert_eq!(
-        contract.allowance,
-        token_client.allowance(&current.admin, &current.spender)
-    );
+impl<'a> CurrentState<'a> {
+    fn new(
+        env: &Env,
+        accounts: &[<Address as SorobanArbitrary>::Prototype],
+        token_contract_id_bytes: &[u8],
+    ) -> Self {
+        let admin = Address::from_val(env, &accounts[0]);
+        let accounts = accounts.iter().map(|a| {
+            Address::from_val(env, a)
+        }).collect::<Vec<_>>();
 
-    let sum_of_balances_0 = contract
-        .sum_of_mints
-        .checked_sub(&contract.sum_of_burns)
-        .expect("Overflow");
-    let sum_of_balances_1 = BigInt::from(token_client.balance(&current.admin))
-        .checked_add(&BigInt::from(token_client.balance(&current.spender)))
-        .expect("Overflow")
-        .checked_add(&BigInt::from(token_client.balance(&current.to)))
-        .expect("Overflow");
+        let token_contract_id =
+            Address::from_string_bytes(&Bytes::from_slice(env, &token_contract_id_bytes));
+        let admin_client = StellarAssetClient::new(env, &token_contract_id);
+        let token_client = Client::new(env, &token_contract_id);
+
+        CurrentState {
+            admin, accounts, admin_client, token_client,
+        }
+    }
+}
+
+fn assert_state(contract: &ContractState, current: &CurrentState) {
+
+    let token_client = &current.token_client;
+
+    for addr in &current.accounts {
+        assert_eq!(
+            contract.get_balance(addr),
+            token_client.balance(addr),
+        );
+    }
+
+    let pairs = current.accounts.iter()
+        .cartesian_product(current.accounts.iter());
+
+    for (addr1, addr2) in pairs {
+        assert_eq!(
+            contract.get_allowance(addr1, addr2),
+            token_client.allowance(addr1, addr2),
+        );
+    }
+
+    let sum_of_balances_0 = &contract.sum_of_mints - &contract.sum_of_burns;
+    let sum_of_balances_1 = current.accounts.iter().map(|a| {
+        BigInt::from(token_client.balance(&a))
+    }).sum();
 
     assert_eq!(sum_of_balances_0, sum_of_balances_1,);
 }
 
-fn require_unique_addresses(addrs: &[&Address]) -> bool {
+fn require_unique_addresses(addrs: &[Address]) -> bool {
     for addr1 in addrs {
         let count = addrs.iter().filter(|a| a == &addr1).count();
         if count > 1 {
@@ -319,7 +481,7 @@ fn require_unique_addresses(addrs: &[&Address]) -> bool {
     true
 }
 
-fn require_contract_addresses(addrs: &[&Address]) -> bool {
+fn require_contract_addresses(addrs: &[Address]) -> bool {
     use stellar_strkey::*;
     for addr in addrs {
         let addr_string = addr.to_string();
@@ -353,28 +515,31 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
         .checked_mul(ledgers as u64)
         .expect("end of time");
 
-    let mut env = prev_env.clone();
-    env.ledger().with_mut(|ledger| {
-        ledger.sequence_number = ledger
-            .sequence_number
-            .checked_add(ledgers)
-            .expect("end of time");
-        ledger.timestamp = ledger
-            .timestamp
-            .checked_add(ledger_time)
-            .expect("end of time");
-    });
+    let use_snapshot = false;
 
-    env
+    if !use_snapshot {
+        let mut env = prev_env.clone();
+        env.ledger().with_mut(|ledger| {
+            ledger.sequence_number = ledger
+                .sequence_number
+                .checked_add(ledgers)
+                .expect("end of time");
+            ledger.timestamp = ledger
+                .timestamp
+                .checked_add(ledger_time)
+                .expect("end of time");
+        });
 
-    /*
-    let mut snapshot = prev_env.to_snapshot();
-    snapshot.sequence_number = snapshot.sequence_number.checked_add(ledgers).expect("end of time");
-    snapshot.timestamp = snapshot.timestamp.checked_add(ledger_time).expect("end of time");
+        env
+    } else {
+        let mut snapshot = prev_env.to_snapshot();
+        snapshot.ledger.sequence_number = snapshot.ledger.sequence_number.checked_add(ledgers).expect("end of time");
+        snapshot.ledger.timestamp = snapshot.ledger.timestamp.checked_add(ledger_time).expect("end of time");
 
-    let env = Env::from_snapshot(snapshot);
+        let env = Env::from_snapshot(snapshot);
 
-    env*/
+        env
+    }
 }
 
 /// Advance time, but do it in increments, periodically pinging the contract to
@@ -406,3 +571,29 @@ fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32)
 
     env
 }
+
+fn address_to_bytes(addr: &Address) -> RustVec<u8> {
+    let addr_str = addr.to_string();
+    let mut buf = vec![0; addr_str.len() as usize];
+    addr_str.copy_into_slice(&mut buf);
+    buf
+}
+
+/*
+
+possible assertions
+
+- allowances can't be greater than balance?
+- no negative balances?
+- make assertions about name/decimals/symbol
+- assertions about negative amounts
+
+todo
+
+- remove checked arithmetic for bigints
+- allow input amounts to be negative
+- use auths correctly
+- allow other address types
+- fix env from snapshot
+
+*/

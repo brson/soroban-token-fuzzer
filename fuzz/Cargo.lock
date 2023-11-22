@@ -433,6 +433,7 @@ name = "fuzzing-native-token-fuzz"
 version = "0.0.0"
 dependencies = [
  "fuzzing-native-token",
+ "itertools 0.12.0",
  "libfuzzer-sys",
  "num-bigint",
  "soroban-ledger-snapshot",
@@ -501,6 +502,12 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "hex-literal"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hmac"
@@ -573,6 +580,15 @@ name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
 dependencies = [
  "either",
 ]
@@ -962,7 +978,7 @@ checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 name = "soroban-builtin-sdk-macros"
 version = "20.0.0-rc2"
 dependencies = [
- "itertools",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -1000,6 +1016,8 @@ dependencies = [
  "curve25519-dalek",
  "ed25519-dalek",
  "getrandom",
+ "hex-literal",
+ "hmac",
  "k256",
  "num-derive",
  "num-integer",
@@ -1019,7 +1037,7 @@ dependencies = [
 name = "soroban-env-macros"
 version = "20.0.0-rc2"
 dependencies = [
- "itertools",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "serde",
@@ -1064,7 +1082,7 @@ version = "20.0.0-rc2"
 dependencies = [
  "crate-git-revision",
  "darling",
- "itertools",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "rustc_version",
