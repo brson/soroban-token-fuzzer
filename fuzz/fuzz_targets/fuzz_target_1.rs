@@ -330,7 +330,7 @@ fuzz_target!(|input: Input| -> Corpus {
         assert_state(&contract_state, &current_state);
     }
 
-    eprintln!("results: {results:?}");
+    //eprintln!("results: {results:?}");
 
     Corpus::Keep
 });
@@ -515,7 +515,7 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
         .checked_mul(ledgers as u64)
         .expect("end of time");
 
-    let use_snapshot = false;
+    let use_snapshot = true;
 
     if !use_snapshot {
         let mut env = prev_env.clone();
@@ -587,6 +587,7 @@ possible assertions
 - no negative balances?
 - make assertions about name/decimals/symbol
 - assertions about negative amounts
+- predict if a call will succeed based on ContractState
 
 todo
 
@@ -594,6 +595,5 @@ todo
 - allow input amounts to be negative
 - use auths correctly
 - allow other address types
-- fix env from snapshot
 
 */
