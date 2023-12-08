@@ -1,26 +1,15 @@
-#![no_std]
+#![allow(unused)]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+pub mod input;
+pub mod config;
+pub mod fuzz;
 
-#[contracttype]
-pub enum DataKey {
-    Token,
-}
+pub use input::Input;
+pub use config::{Config, ContractTokenOps, TokenAdminClient};
+pub use fuzz::fuzz_token;
 
-fn get_token(e: &Env) -> Address {
-    e.storage().persistent().get(&DataKey::Token).unwrap()
-}
+// copied from somewhere in the sdk
+const DAY_IN_LEDGERS: u32 = 17280;
+const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
+const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
 
-#[contract]
-pub struct TestContract;
-
-#[contractimpl]
-impl TestContract {
-    pub fn init(e: Env, contract: Address) {
-        e.storage().persistent().set(&DataKey::Token, &contract);
-    }
-
-    pub fn get_token(e: Env) -> Address {
-        get_token(&e)
-    }
-}

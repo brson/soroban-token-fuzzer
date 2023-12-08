@@ -1,7 +1,6 @@
-#![no_main]
-#![allow(unused)]
+use crate::input::*;
 
-use crate::arbitrary::Unstructured;
+use arbitrary::Unstructured;
 use itertools::Itertools;
 use libfuzzer_sys::{fuzz_target, Corpus};
 use num_bigint::BigInt;
@@ -17,96 +16,10 @@ use soroban_sdk::{
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
+use crate::DAY_IN_LEDGERS;
+use crate::config::*;
 
-pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
-pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
-pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
-pub(crate) const NUMBER_OF_ADDRESSES: usize = 3;
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct Input {
-    addresses: [<Address as SorobanArbitrary>::Prototype; NUMBER_OF_ADDRESSES],
-    commands: RustVec<Command>,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub enum Command {
-    Mint(MintInput),
-    Approve(ApproveInput),
-    TransferFrom(TransferFromInput),
-    Transfer(TransferInput),
-    BurnFrom(BurnFromInput),
-    Burn(BurnInput),
-    AdvanceLedgers(AdvanceLedgersInput),
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct MintInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    amount: i128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    to_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct ApproveInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    amount: i128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
-    expiration_ledger: u32,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    from_account_index: usize,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    spender_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct TransferFromInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    amount: i128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    spender_account_index: usize,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    from_account_index: usize,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    to_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct TransferInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    amount: i128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    from_account_index: usize,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    to_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct BurnFromInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    amount: i128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    spender_account_index: usize,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    from_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct BurnInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    amount: i128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
-    from_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct AdvanceLedgersInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(1..=DAY_IN_LEDGERS))]
-    ledgers: u32,
-}
-
-fuzz_target!(|input: Input| -> Corpus {
+pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     if input.commands.is_empty() {
         return Corpus::Reject;
     }
@@ -133,12 +46,17 @@ fuzz_target!(|input: Input| -> Corpus {
             return Corpus::Reject;
         }
 
-        let token_contract_id = env.register_stellar_asset_contract(admin.clone());
+        let token_contract_id = config.register_contract_init(&env, &admin);
         token_contract_id_bytes = address_to_bytes(&token_contract_id);
     }
 
     let mut contract_state = ContractState::init(&env);
-    let mut current_state = CurrentState::new(&env, &input.addresses, &token_contract_id_bytes);
+    let mut current_state = CurrentState::new(
+        &config,
+        &env,
+        &input.addresses,
+        &token_contract_id_bytes
+    );
 
     let mut results: Vec<(&'static str, bool)> = vec![];
 
@@ -280,10 +198,10 @@ fuzz_target!(|input: Input| -> Corpus {
                     .checked_add(cmd_input.ledgers)
                     .expect("end of time");
 
-                env = advance_time_to(env, &token_contract_id_bytes, to_ledger);
+                env = advance_time_to(&config, env, &token_contract_id_bytes, to_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
-                current_state = CurrentState::new(&env, &input.addresses, &token_contract_id_bytes);
+                current_state = CurrentState::new(&config, &env, &input.addresses, &token_contract_id_bytes);
 
                 // update saved allowance number after advance ledgers
                 // fixme track expiration ledger instead of asking the contract
@@ -309,7 +227,7 @@ fuzz_target!(|input: Input| -> Corpus {
     // eprintln!("results: {results:?}");
 
     Corpus::Keep
-});
+}
 
 pub struct ContractState {
     name: RustVec<u8>,
@@ -382,12 +300,13 @@ impl ContractState {
 struct CurrentState<'a> {
     admin: Address,
     accounts: Vec<Address>,
-    admin_client: StellarAssetClient<'a>,
+    admin_client: Box<dyn TokenAdminClient<'a> + 'a>,
     token_client: Client<'a>,
 }
 
 impl<'a> CurrentState<'a> {
     fn new(
+        config: &Config,
         env: &Env,
         accounts: &[<Address as SorobanArbitrary>::Prototype],
         token_contract_id_bytes: &[u8],
@@ -400,7 +319,7 @@ impl<'a> CurrentState<'a> {
 
         let token_contract_id =
             Address::from_string_bytes(&Bytes::from_slice(env, &token_contract_id_bytes));
-        let admin_client = StellarAssetClient::new(env, &token_contract_id);
+        let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
         CurrentState {
@@ -535,7 +454,12 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
 
 /// Advance time, but do it in increments, periodically pinging the contract to
 /// keep it alive.
-fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32) -> Env {
+fn advance_time_to(
+    config: &Config,
+    mut env: Env,
+    token_contract_id_bytes: &[u8],
+    to_ledger: u32
+) -> Env {
     loop {
         let curr_ledger = env.ledger().get().sequence_number;
         assert!(curr_ledger < to_ledger);
@@ -549,6 +473,10 @@ fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32)
 
         env = advance_env(env, advance_ledgers);
 
+        let token_contract_id =
+            Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
+        config.reregister_contract(&env, &token_contract_id);
+
         if next_ledger == to_ledger {
             break;
         } else {
@@ -556,7 +484,8 @@ fn advance_time_to(mut env: Env, token_contract_id_bytes: &[u8], to_ledger: u32)
             let token_contract_id =
                 Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
             let token_client = Client::new(&env, &token_contract_id);
-            let _ = token_client.try_allowance(&Address::generate(&env), &Address::generate(&env));
+            let r = token_client.try_allowance(&Address::generate(&env), &Address::generate(&env));
+            assert!(r.is_ok());
         }
     }
 
