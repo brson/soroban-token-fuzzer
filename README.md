@@ -72,13 +72,64 @@ cargo +nightly fuzz run fuzz_my_token
 ```
 
 
-## What is tested?
+## How does it work?
+
+The fuzzer generates several addresses,
+one of which will be an admin.
+
+It uses token-specific code to initialize the contract.
+
+It then executes some number of commands against the contract,
+either a mutable method on the `TokenInterface` interface,
+a token-specific `mint` method, or a command to advance time
+and begin a new transaction.
+
+After every step the fuzzer makes general assertions about invariants,
+and specific assertions related to the executed command.
+
+It maintains independent state about what it expects from the token's
+internal state, including information about mints, burns, allowances and balances.
+
+
+## What is tested / asserted?
+
+After every step various invariants are asserted:
+
+- All current balances are equal to the fuzzer's own accounting of balances.
+- All current balances are greater than 0.
+- All pairs of addresses have allowance equal to the fuzzer's own accounting of allowances.
+- The sum of all balances is equal to the sum of mints minus the sum of burns.
+- The results of the `name`, `symbol` and `decimals`
+  methods have not changed.
 
 
 ## What is yet to be tested?
 
-- Auths
+- Contract calls do not panic.
+  An error of type [`WasmVm`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorType.html#variant.WasmVm)
+  and code [`InvalidAction`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorCode.html#variant.InvalidAction)
+  is considered a panic,
+  as that is what the runtime generates on panic.
+- Auths are checked correctly.
 - Non-contract address types
+- Admin methods other than `mint`. There is no standard
+  admin interface for Soroban tokens.
+- Accessor methods don't mutate internal state.
+- Assertions about negative numbers in various situations.
+- Assertions about expected results of individual calls.
+
+
+## Tips for writing fuzzable Soroban contracts
+
+The most important thing to know about fuzzing soroban contracts:
+never call `panic!` and related functions to handle errors that may
+occur during normal operation: the fuzzer views panics as bugs.
+Instead, use the Soroban-specific
+[`panic_with_error!`](https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.panic_with_error.html)
+macro, which the fuzzer can distinguish from a bare `panic!`.
+
+For additional tips see the end of
+[this video presentation](https://www.youtube.com/watch?v=EzhMdIaPETo&pp=ygUec3RlbGxhciBmdXp6aW5nIGJyaWFuIGFuZGVyc29u).
 
 
 ## License
