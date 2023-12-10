@@ -4,6 +4,12 @@ use soroban_sdk::xdr::SorobanAuthorizationEntry;
 use soroban_sdk::{Address, Env};
 use soroban_sdk::{Error, InvokeError, TryFromVal, Val};
 
+/// Token-specific configuration and customization.
+///
+/// Most tokens will construct this with the
+/// [`Config::contract`] constructor, providing
+/// an implementation of [`ContractTokenOps`]
+/// customized to their token.
 pub struct Config {
     kind: TokenKind,
 }
@@ -18,10 +24,28 @@ pub struct ContractTokenConfig {
 }
 
 pub trait ContractTokenOps {
-    fn register_contract_init(&self, env: &Env, admin: &Address) -> Address;
+    /// Register the contract with the environment and perform
+    /// contract-specific one-time initialization.
+    ///
+    /// This function will be called once.
+    fn register_contract_init(
+        &self,
+        env: &Env,
+        admin: &Address,
+    ) -> Address;
 
-    fn reregister_contract(&self, env: &Env, token_contract_id: &Address);
+    /// Register the contract with the environment.
+    ///
+    /// This will be called on all subsequent transactions
+    /// after the first, i.e. every time time is advanced
+    /// and the `Env` is recreated.
+    fn reregister_contract(
+        &self,
+        env: &Env,
+        token_contract_id: &Address,
+    );
 
+    /// Create an admin client.
     fn new_admin_client<'a>(
         &self,
         env: &Env,
@@ -30,14 +54,17 @@ pub trait ContractTokenOps {
 }
 
 pub trait TokenAdminClient<'a> {
+    /// Mint tokens.
     fn try_mint(
         &self,
         to: &Address,
         amount: &i128,
     ) -> Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
 
-    // This is just defined to make sure the lifetimes work;
-    // we don't actually need to implement it yet. Unused.
+    /// Unused.
+    ///
+    /// This is just defined to make sure the lifetimes work;
+    /// we don't actually need to implement it yet.
     fn set_auths(&self, auths: &'a [SorobanAuthorizationEntry]) -> Box<dyn TokenAdminClient> {
         todo!()
     }
