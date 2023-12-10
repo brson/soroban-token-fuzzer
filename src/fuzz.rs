@@ -1,5 +1,7 @@
 use crate::input::*;
 
+use crate::config::*;
+use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
 use itertools::Itertools;
 use libfuzzer_sys::{fuzz_target, Corpus};
@@ -12,15 +14,13 @@ use soroban_sdk::testutils::{
 };
 use soroban_sdk::{
     token::{Client, StellarAssetClient},
-    Address, Bytes, Env, FromVal, IntoVal, String,
-    Val, Error, InvokeError, TryFromVal,
+    Address, Bytes, Env, Error, FromVal, IntoVal, InvokeError, String, TryFromVal, Val,
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
-use crate::DAY_IN_LEDGERS;
-use crate::config::*;
 
-type TokenContractResult = Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
+type TokenContractResult =
+    Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
 
 pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     if input.commands.is_empty() {
@@ -54,12 +54,8 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     }
 
     let mut contract_state = ContractState::init(&env);
-    let mut current_state = CurrentState::new(
-        &config,
-        &env,
-        &input.addresses,
-        &token_contract_id_bytes
-    );
+    let mut current_state =
+        CurrentState::new(&config, &env, &input.addresses, &token_contract_id_bytes);
 
     let mut results: Vec<(&'static str, bool)> = vec![];
 
@@ -92,7 +88,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 }
 
                 verify_token_contract_result(&env, &r);
-                
+
                 if let Ok(r) = r {
                     let r = r.unwrap();
 
@@ -117,7 +113,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 }
 
                 verify_token_contract_result(&env, &r);
-                
+
                 if let Ok(r) = r {
                     let r = r.unwrap();
 
@@ -239,7 +235,8 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 env = advance_time_to(&config, env, &token_contract_id_bytes, to_ledger);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
-                current_state = CurrentState::new(&config, &env, &input.addresses, &token_contract_id_bytes);
+                current_state =
+                    CurrentState::new(&config, &env, &input.addresses, &token_contract_id_bytes);
 
                 // update saved allowance number after advance ledgers
                 // fixme track expiration ledger instead of asking the contract
@@ -278,7 +275,7 @@ pub struct ContractState {
 }
 
 impl ContractState {
-    fn init(env: &Env ) -> Self {
+    fn init(env: &Env) -> Self {
         ContractState {
             name: Vec::<u8>::new(),
             symbol: Vec::<u8>::new(),
@@ -495,7 +492,7 @@ fn advance_time_to(
     config: &Config,
     mut env: Env,
     token_contract_id_bytes: &[u8],
-    to_ledger: u32
+    to_ledger: u32,
 ) -> Env {
     loop {
         let curr_ledger = env.ledger().get().sequence_number;
@@ -537,8 +534,8 @@ fn address_to_bytes(addr: &Address) -> RustVec<u8> {
 }
 
 fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
-    use soroban_sdk::xdr::{ScErrorType, ScErrorCode};
     use soroban_sdk::testutils::Events;
+    use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
     match r {
         Err(Ok(e)) => {
             if e.is_type(ScErrorType::WasmVm) && e.is_code(ScErrorCode::InvalidAction) {
@@ -551,7 +548,7 @@ fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
                 panic!("{msg}");
             }
         }
-        _ => { }
+        _ => {}
     }
 }
 

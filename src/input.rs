@@ -1,3 +1,4 @@
+use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
 use soroban_sdk::testutils::{
     arbitrary::{arbitrary, SorobanArbitrary},
@@ -8,7 +9,6 @@ use soroban_sdk::{
     token::{Client, StellarAssetClient},
     Address, Bytes, Env, FromVal, IntoVal, String,
 };
-use crate::DAY_IN_LEDGERS;
 use std::vec::Vec as RustVec;
 
 const NUMBER_OF_ADDRESSES: usize = 3;
@@ -95,4 +95,3 @@ pub struct AdvanceLedgersInput {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(1..=DAY_IN_LEDGERS))]
     pub ledgers: u32,
 }
-

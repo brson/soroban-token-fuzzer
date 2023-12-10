@@ -1,8 +1,8 @@
-use soroban_sdk::{TryFromVal, Val, Error, InvokeError};
-use soroban_sdk::{Env, Address};
+use soroban_sdk::testutils::ContractFunctionSet;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::SorobanAuthorizationEntry;
-use soroban_sdk::testutils::ContractFunctionSet;
+use soroban_sdk::{Address, Env};
+use soroban_sdk::{Error, InvokeError, TryFromVal, Val};
 
 pub struct Config {
     kind: TokenKind,
@@ -18,17 +18,9 @@ pub struct ContractTokenConfig {
 }
 
 pub trait ContractTokenOps {
-    fn register_contract_init(
-        &self,
-        env: &Env,
-        admin: &Address,
-    ) -> Address;
+    fn register_contract_init(&self, env: &Env, admin: &Address) -> Address;
 
-    fn reregister_contract(
-        &self,
-        env: &Env,
-        token_contract_id: &Address,
-    );
+    fn reregister_contract(&self, env: &Env, token_contract_id: &Address);
 
     fn new_admin_client<'a>(
         &self,
@@ -62,45 +54,23 @@ impl Config {
         }
     }
 
-    pub fn contract(
-        ops: impl ContractTokenOps + 'static,
-    ) -> Config {
+    pub fn contract(ops: impl ContractTokenOps + 'static) -> Config {
         Config {
-            kind: TokenKind::Contract(
-                ContractTokenConfig {
-                    ops: Box::new(ops),
-                }
-            )
+            kind: TokenKind::Contract(ContractTokenConfig { ops: Box::new(ops) }),
         }
     }
 
-    pub fn register_contract_init(
-        &self,
-        env: &Env,
-        admin: &Address,
-    ) -> Address {
+    pub fn register_contract_init(&self, env: &Env, admin: &Address) -> Address {
         match &self.kind {
-            TokenKind::Native => {
-                env.register_stellar_asset_contract(admin.clone())
-            }
-            TokenKind::Contract(cfg) => {
-                cfg.register_contract_init(env, admin)
-            }
+            TokenKind::Native => env.register_stellar_asset_contract(admin.clone()),
+            TokenKind::Contract(cfg) => cfg.register_contract_init(env, admin),
         }
     }
 
-    pub fn reregister_contract(
-        &self,
-        env: &Env,
-        token_contract_id: &Address,
-    ) {
+    pub fn reregister_contract(&self, env: &Env, token_contract_id: &Address) {
         match &self.kind {
-            TokenKind::Native => {
-                /* nop */
-            }
-            TokenKind::Contract(cfg) => {
-                cfg.reregister_contract(env, token_contract_id)
-            }
+            TokenKind::Native => { /* nop */ }
+            TokenKind::Contract(cfg) => cfg.reregister_contract(env, token_contract_id),
         }
     }
 
@@ -110,16 +80,10 @@ impl Config {
         token_contract_id: &Address,
     ) -> Box<dyn TokenAdminClient<'a> + 'a> {
         match &self.kind {
-            TokenKind::Native => {
-                Box::new(NativeTokenAdminClient {
-                    admin_client: {
-                        StellarAssetClient::new(env, &token_contract_id)
-                    }
-                })
-            }
-            TokenKind::Contract(cfg) => {
-                cfg.new_admin_client(env, token_contract_id)
-            }
+            TokenKind::Native => Box::new(NativeTokenAdminClient {
+                admin_client: { StellarAssetClient::new(env, &token_contract_id) },
+            }),
+            TokenKind::Contract(cfg) => cfg.new_admin_client(env, token_contract_id),
         }
     }
 }
@@ -139,19 +103,11 @@ impl<'a> TokenAdminClient<'a> for NativeTokenAdminClient<'a> {
 }
 
 impl ContractTokenConfig {
-    pub fn register_contract_init(
-        &self,
-        env: &Env,
-        admin: &Address,
-    ) -> Address {
+    pub fn register_contract_init(&self, env: &Env, admin: &Address) -> Address {
         self.ops.register_contract_init(env, admin)
     }
 
-    pub fn reregister_contract(
-        &self,
-        env: &Env,
-        token_contract_id: &Address,
-    ) {
+    pub fn reregister_contract(&self, env: &Env, token_contract_id: &Address) {
         self.ops.reregister_contract(env, token_contract_id)
     }
 
@@ -163,4 +119,3 @@ impl ContractTokenConfig {
         self.ops.new_admin_client(env, token_contract_id)
     }
 }
-
