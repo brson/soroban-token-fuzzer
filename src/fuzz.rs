@@ -13,11 +13,14 @@ use soroban_sdk::testutils::{
 use soroban_sdk::{
     token::{Client, StellarAssetClient},
     Address, Bytes, Env, FromVal, IntoVal, String,
+    Val, Error, InvokeError, TryFromVal,
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
 use crate::DAY_IN_LEDGERS;
 use crate::config::*;
+
+type TokenContractResult = Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
 
 pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     if input.commands.is_empty() {
@@ -84,7 +87,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 let r = admin_client.try_mint(&accounts[input.to_account_index], &input.amount);
 
                 log_result("mint", &r);
+                if input.amount < 0 {
+                    assert!(r.is_err());
+                }
 
+                verify_token_contract_result(&env, &r);
+                
                 if let Ok(r) = r {
                     let r = r.unwrap();
 
@@ -104,6 +112,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
                 log_result("approve", &r);
 
+                if input.amount < 0 {
+                    assert!(r.is_err());
+                }
+
+                verify_token_contract_result(&env, &r);
+                
                 if let Ok(r) = r {
                     let r = r.unwrap();
 
@@ -123,6 +137,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 );
 
                 log_result("transfer_from", &r);
+
+                if input.amount < 0 {
+                    assert!(r.is_err());
+                }
+
+                verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
                     let r = r.unwrap();
@@ -146,6 +166,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
                 log_result("transfer", &r);
 
+                if input.amount < 0 {
+                    assert!(r.is_err());
+                }
+
+                verify_token_contract_result(&env, &r);
+
                 if let Ok(r) = r {
                     let r = r.unwrap();
 
@@ -161,6 +187,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 );
 
                 log_result("burn_from", &r);
+
+                if input.amount < 0 {
+                    assert!(r.is_err());
+                }
+
+                verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
                     let r = r.unwrap();
@@ -179,6 +211,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
             }
             Command::Burn(input) => {
                 let r = token_client.try_burn(&accounts[input.from_account_index], &input.amount);
+
+                if input.amount < 0 {
+                    assert!(r.is_err());
+                }
+
+                verify_token_contract_result(&env, &r);
 
                 log_result("burn", &r);
 
@@ -366,8 +404,7 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
 }
 
 fn string_to_bytes(s: String) -> RustVec<u8> {
-    let mut out = RustVec::<u8>::new();
-    out.resize(s.len().try_into().unwrap(), 0);
+    let mut out = vec![0; s.len() as usize];
     s.copy_into_slice(&mut out);
 
     out
@@ -499,6 +536,25 @@ fn address_to_bytes(addr: &Address) -> RustVec<u8> {
     buf
 }
 
+fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
+    use soroban_sdk::xdr::{ScErrorType, ScErrorCode};
+    use soroban_sdk::testutils::Events;
+    match r {
+        Err(Ok(e)) => {
+            if e.is_type(ScErrorType::WasmVm) && e.is_code(ScErrorCode::InvalidAction) {
+                let msg = "contract failed with InvalidAction - unexpected panic?";
+                eprintln!("{msg}");
+                eprintln!("recent events (10):");
+                for (i, event) in env.events().all().iter().rev().take(10).enumerate() {
+                    eprintln!("{i}: {event:?}");
+                }
+                panic!("{msg}");
+            }
+        }
+        _ => { }
+    }
+}
+
 /*
 
 possible assertions
@@ -506,7 +562,7 @@ possible assertions
 // - allowances can't be greater than balance?
 // - no negative balances?
 // - make assertions about name/decimals/symbol
-- assertions about negative amounts
+// - assertions about negative amounts
 - predict if a call will succeed based on ContractState
 
 todo
