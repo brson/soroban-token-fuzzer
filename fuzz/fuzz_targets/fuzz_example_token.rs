@@ -10,7 +10,7 @@ use soroban_token_fuzzer::*;
 // by the `fuzz_token` function.
 //
 // The `Corpus` return type is used by the fuzzer to communicate
-// the results of fuzzing back to the fuzzer, particular to
+// the results of fuzzing back to the fuzzer, particulary to
 // instruct the fuzzer that the `Input` case was unusable
 // (for various reasons).
 fuzz_target!(|input: Input| -> Corpus {
