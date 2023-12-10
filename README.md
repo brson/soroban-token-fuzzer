@@ -117,6 +117,7 @@ After every step various invariants are asserted:
 - Accessor methods don't mutate internal state.
 - Assertions about negative numbers in various situations.
 - Assertions about expected results of individual calls.
+- Intentionally expiring allowances, the contract etc.
 
 
 ## Tips for writing fuzzable Soroban contracts
