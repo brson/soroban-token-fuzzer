@@ -9,9 +9,10 @@ use num_bigint::BigInt;
 use soroban_ledger_snapshot::LedgerSnapshot;
 use soroban_sdk::testutils::{
     arbitrary::{arbitrary, SorobanArbitrary},
-    Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo, Logs, MockAuth,
-    MockAuthInvoke,
+    Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo, Logs,
+    MockAuth, MockAuthInvoke,
 };
+use soroban_sdk::xdr::{Hash, ScAddress, ScErrorCode, ScErrorType};
 use soroban_sdk::{
     token::{Client, StellarAssetClient},
     Address, Bytes, Env, Error, FromVal, IntoVal, InvokeError, String, TryFromVal, Val,
@@ -33,29 +34,36 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     let token_contract_id_bytes: RustVec<u8>;
 
     // Do initial setup, including registering the contract.
-    {
-        let admin = Address::from_val(&env, &input.addresses[0]);
-        let accounts = input
-            .addresses
-            .iter()
-            .map(|a| Address::from_val(&env, a))
-            .collect::<Vec<_>>();
+    let mut accounts = RustVec::<Address>::new();
+    let mut account_seeds = RustVec::<[u8; 32]>::new();
 
-        if !require_unique_addresses(&accounts) {
-            return Corpus::Reject;
-        }
+    for i in 0..NUMBER_OF_ADDRESSES {
+        let seed: [u8; 8] = input
+            .address_seed
+            .checked_add(i as u64)
+            .expect("Overflow")
+            .to_be_bytes();
+        let seed: [u8; 32] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, seed[0],
+            seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
+        ];
 
-        if !require_contract_addresses(&accounts) {
-            return Corpus::Reject;
-        }
+        let address = Address::try_from_val(&env, &ScAddress::Contract(Hash(seed))).unwrap();
 
-        let token_contract_id = config.register_contract_init(&env, &admin);
-        token_contract_id_bytes = address_to_bytes(&token_contract_id);
+        account_seeds.push(seed);
+        accounts.push(address);
+        //accounts.push(Address::generate(&env));
     }
+
+    println!("accounts: {:?}", accounts);
+    let admin = &accounts[0];
+
+    let token_contract_id = config.register_contract_init(&env, &admin);
+    token_contract_id_bytes = address_to_bytes(&token_contract_id);
 
     let mut contract_state = ContractState::init(&env);
     let mut current_state =
-        CurrentState::new(&config, &env, &input.addresses, &token_contract_id_bytes);
+        CurrentState::new(&config, &env, &account_seeds, &token_contract_id_bytes);
 
     let mut results: Vec<(&'static str, bool)> = vec![];
 
@@ -236,7 +244,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
                 current_state =
-                    CurrentState::new(&config, &env, &input.addresses, &token_contract_id_bytes);
+                    CurrentState::new(&config, &env, &account_seeds, &token_contract_id_bytes);
 
                 // update saved allowance number after advance ledgers
                 // fixme track expiration ledger instead of asking the contract
@@ -343,19 +351,19 @@ impl<'a> CurrentState<'a> {
     fn new(
         config: &Config,
         env: &Env,
-        accounts: &[<Address as SorobanArbitrary>::Prototype],
+        account_seeds: &[[u8; 32]],
         token_contract_id_bytes: &[u8],
     ) -> Self {
-        let admin = Address::from_val(env, &accounts[0]);
-        let accounts = accounts
-            .iter()
-            .map(|a| Address::from_val(env, a))
-            .collect::<Vec<_>>();
-
         let token_contract_id =
             Address::from_string_bytes(&Bytes::from_slice(env, &token_contract_id_bytes));
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
+
+        let accounts: Vec<Address> = account_seeds
+            .iter()
+            .map(|s| Address::try_from_val(env, &ScAddress::Contract(Hash(*s))).unwrap())
+            .collect();
+        let admin = accounts[0].clone();
 
         CurrentState {
             admin,
@@ -534,8 +542,6 @@ fn address_to_bytes(addr: &Address) -> RustVec<u8> {
 }
 
 fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
-    use soroban_sdk::testutils::Events;
-    use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
     match r {
         Err(Ok(e)) => {
             if e.is_type(ScErrorType::WasmVm) && e.is_code(ScErrorCode::InvalidAction) {
