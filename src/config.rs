@@ -28,22 +28,14 @@ pub trait ContractTokenOps {
     /// contract-specific one-time initialization.
     ///
     /// This function will be called once.
-    fn register_contract_init(
-        &self,
-        env: &Env,
-        admin: &Address,
-    ) -> Address;
+    fn register_contract_init(&self, env: &Env, admin: &Address) -> Address;
 
     /// Register the contract with the environment.
     ///
     /// This will be called on all subsequent transactions
     /// after the first, i.e. every time time is advanced
     /// and the `Env` is recreated.
-    fn reregister_contract(
-        &self,
-        env: &Env,
-        token_contract_id: &Address,
-    );
+    fn reregister_contract(&self, env: &Env, token_contract_id: &Address);
 
     /// Create an admin client.
     fn new_admin_client<'a>(

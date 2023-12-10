@@ -34,11 +34,7 @@ impl ContractTokenOps for TokenOps {
     /// contract-specific one-time initialization.
     ///
     /// This function will be called once.
-    fn register_contract_init(
-        &self,
-        env: &Env,
-        admin: &Address,
-    ) -> Address {
+    fn register_contract_init(&self, env: &Env, admin: &Address) -> Address {
         let token_contract_id = env.register_contract(None, example_token::contract::Token);
 
         let admin_client = example_token::TokenClient::new(&env, &token_contract_id);
@@ -59,11 +55,7 @@ impl ContractTokenOps for TokenOps {
     /// This will be called on all subsequent transactions
     /// after the first, i.e. every time time is advanced
     /// and the `Env` is recreated.
-    fn reregister_contract(
-        &self,
-        env: &Env,
-        token_contract_id: &Address,
-    ) {
+    fn reregister_contract(&self, env: &Env, token_contract_id: &Address) {
         env.register_contract(Some(token_contract_id), example_token::contract::Token);
     }
 
