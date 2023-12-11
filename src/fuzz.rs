@@ -52,13 +52,11 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
         account_seeds.push(seed);
         accounts.push(address);
-        //accounts.push(Address::generate(&env));
     }
 
-    println!("accounts: {:?}", accounts);
     let admin = &accounts[0];
 
-    let token_contract_id = config.register_contract_init(&env, &admin);
+    let token_contract_id = config.register_contract_init(&env, admin);
     token_contract_id_bytes = address_to_bytes(&token_contract_id);
 
     let mut contract_state = ContractState::init(&env);
