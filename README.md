@@ -101,22 +101,24 @@ After every step various invariants are asserted:
 - The sum of all balances is equal to the sum of mints minus the sum of burns.
 - The results of the `name`, `symbol` and `decimals`
   methods have not changed.
-
-
-## What is yet to be tested?
-
 - Contract calls do not panic.
   An error of type [`WasmVm`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorType.html#variant.WasmVm)
   and code [`InvalidAction`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorCode.html#variant.InvalidAction)
   is considered a panic,
   as that is what the runtime generates on panic.
+- For `approve`, `transfer`, `transfer_from`, `burn_from`, `burn`,
+  if the input amount is negative, the call returns an error.
+
+
+## What is yet to be tested?
+
 - Auths are checked correctly.
 - Non-contract address types
 - Admin methods other than `mint`. There is no standard
   admin interface for Soroban tokens.
 - Accessor methods don't mutate internal state.
-- Assertions about negative numbers in various situations.
-- Assertions about expected results of individual calls.
+- More assertions about negative numbers in various situations.
+- More assertions about expected results of individual calls.
 - Intentionally expiring allowances, the contract etc.
 
 
