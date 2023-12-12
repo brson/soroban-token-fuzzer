@@ -80,7 +80,7 @@ one of which will be an admin.
 It uses token-specific code to initialize the contract.
 
 It then executes some number of commands against the contract,
-either a mutable method on the `TokenInterface` interface,
+either a method on the `TokenInterface` interface,
 a token-specific `mint` method, or a command to advance time
 and begin a new transaction.
 
