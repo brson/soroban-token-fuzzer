@@ -1127,6 +1127,7 @@ dependencies = [
 name = "soroban-token-fuzzer"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "itertools 0.12.0",
  "libfuzzer-sys",
  "num-bigint",

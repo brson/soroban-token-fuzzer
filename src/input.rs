@@ -20,7 +20,14 @@ pub const NUMBER_OF_ADDRESSES: usize = 3;
 pub struct Input {
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(u64::MIN..=u64::MAX - NUMBER_OF_ADDRESSES as u64))]
     pub address_seed: u64,
+    pub address_types: [AddressType; NUMBER_OF_ADDRESSES],
     pub commands: RustVec<Command>,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub enum AddressType {
+    Account,
+    Contract,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]

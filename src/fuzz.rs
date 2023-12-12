@@ -3,6 +3,7 @@ use crate::input::*;
 use crate::config::*;
 use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
+use ed25519_dalek::SigningKey;
 use itertools::Itertools;
 use libfuzzer_sys::{fuzz_target, Corpus};
 use num_bigint::BigInt;
@@ -12,7 +13,7 @@ use soroban_sdk::testutils::{
     Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo, Logs,
     MockAuth, MockAuthInvoke,
 };
-use soroban_sdk::xdr::{Hash, ScAddress, ScErrorCode, ScErrorType};
+use soroban_sdk::xdr::{AccountId, Hash, PublicKey, ScAddress, ScErrorCode, ScErrorType, Uint256};
 use soroban_sdk::{
     token::{Client, StellarAssetClient},
     Address, Bytes, Env, Error, FromVal, IntoVal, InvokeError, String, TryFromVal, Val,
@@ -37,34 +38,21 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     let token_contract_id_bytes: RustVec<u8>;
 
     // Do initial setup, including registering the contract.
-    let mut accounts = RustVec::<Address>::new();
-    let mut account_seeds = RustVec::<[u8; 32]>::new();
+    let addresses = generate_addresses_from_seed(&env, input.address_seed, &input.address_types);
 
-    for i in 0..NUMBER_OF_ADDRESSES {
-        let seed: [u8; 8] = input
-            .address_seed
-            .checked_add(i as u64)
-            .expect("Overflow")
-            .to_be_bytes();
-        let seed: [u8; 32] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, seed[0],
-            seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
-        ];
-
-        let address = Address::try_from_val(&env, &ScAddress::Contract(Hash(seed))).unwrap();
-
-        account_seeds.push(seed);
-        accounts.push(address);
-    }
-
-    let admin = &accounts[0];
+    let admin = &addresses[0];
 
     let token_contract_id = config.register_contract_init(&env, admin);
     token_contract_id_bytes = address_to_bytes(&token_contract_id);
 
     let mut contract_state = ContractState::init(&env);
-    let mut current_state =
-        CurrentState::new(&config, &env, &account_seeds, &token_contract_id_bytes);
+    let mut current_state = CurrentState::new(
+        &env,
+        &config,
+        &token_contract_id_bytes,
+        input.address_seed,
+        &input.address_types,
+    );
 
     let mut results: Vec<(&'static str, bool)> = vec![];
 
@@ -238,8 +226,13 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 env = advance_time_to(&config, env, &token_contract_id_bytes, input.ledgers);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
-                current_state =
-                    CurrentState::new(&config, &env, &account_seeds, &token_contract_id_bytes);
+                current_state = CurrentState::new(
+                    &env,
+                    &config,
+                    &token_contract_id_bytes,
+                    input.address_seed,
+                    &input.address_types,
+                );
 
                 // update saved allowance number after advance ledgers
                 // fixme track expiration ledger instead of asking the contract
@@ -361,20 +354,19 @@ struct CurrentState<'a> {
 
 impl<'a> CurrentState<'a> {
     fn new(
-        config: &Config,
         env: &Env,
-        account_seeds: &[[u8; 32]],
+        config: &Config,
         token_contract_id_bytes: &[u8],
+        address_seed: u64,
+        address_types: &[AddressType; NUMBER_OF_ADDRESSES],
     ) -> Self {
         let token_contract_id =
             Address::from_string_bytes(&Bytes::from_slice(env, &token_contract_id_bytes));
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
-        let accounts: Vec<Address> = account_seeds
-            .iter()
-            .map(|s| Address::try_from_val(env, &ScAddress::Contract(Hash(*s))).unwrap())
-            .collect();
+        let accounts = generate_addresses_from_seed(env, address_seed, address_types);
+
         let admin = accounts[0].clone();
 
         CurrentState {
@@ -577,6 +569,44 @@ fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
     }
 }
 
+fn generate_addresses_from_seed(
+    env: &Env,
+    address_seed: u64,
+    address_types: &[AddressType; NUMBER_OF_ADDRESSES],
+) -> RustVec<Address> {
+    let mut addresses = RustVec::<Address>::new();
+
+    for i in 0..NUMBER_OF_ADDRESSES {
+        let seed = address_seed
+            .checked_add(i as u64)
+            .expect("Overflow")
+            .to_be_bytes();
+        let seed: [u8; 32] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, seed[0],
+            seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
+        ];
+
+        let address = match address_types[i] {
+            AddressType::Account => {
+                let signing_key = SigningKey::from_bytes(&seed);
+                let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+                    signing_key.verifying_key().to_bytes(),
+                )));
+                let sc_address = ScAddress::Account(account_id);
+                let address = Address::try_from_val(env, &sc_address).unwrap();
+                address
+            }
+            AddressType::Contract => {
+                Address::try_from_val(env, &ScAddress::Contract(Hash(seed))).unwrap()
+            }
+        };
+
+        addresses.push(address);
+    }
+
+    addresses
+}
+
 /*
 
 possible assertions
@@ -591,7 +621,6 @@ possible assertions
 todo
 
 - use auths correctly
-- allow other address types
-- 
+// - allow other address types
 
 */
