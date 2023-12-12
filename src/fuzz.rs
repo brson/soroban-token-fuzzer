@@ -20,6 +20,9 @@ use soroban_sdk::{
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
 
+// Don't know where this number comes from.
+const MAX_LEDGERS_TO_ADVANCE: u32 = 4095;
+
 type TokenContractResult =
     Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
 
@@ -505,7 +508,7 @@ fn advance_time_to(
         assert!(curr_ledger < to_ledger);
 
         let next_ledger = curr_ledger
-            .checked_add(DAY_IN_LEDGERS)
+            .checked_add(MAX_LEDGERS_TO_ADVANCE)
             .expect("end of time");
         let next_ledger = next_ledger.min(to_ledger);
 
