@@ -32,7 +32,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     }
 
     //eprintln!("input: {input:#?}");
-    let mut env = create_env();
+    let mut env = Env::default();
 
     let token_contract_id_bytes: RustVec<u8>;
 
@@ -234,14 +234,8 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                         contract_state.sum_of_burns + &BigInt::from(input.amount);
                 }
             }
-            Command::AdvanceLedgers(cmd_input) => {
-                let to_ledger = env
-                    .ledger()
-                    .sequence()
-                    .checked_add(cmd_input.ledgers)
-                    .expect("end of time");
-
-                env = advance_time_to(&config, env, &token_contract_id_bytes, to_ledger);
+            Command::AdvanceLedgers(input) => {
+                env = advance_time_to(&config, env, &token_contract_id_bytes, input.ledgers);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
                 current_state =
@@ -273,6 +267,21 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     Corpus::Keep
 }
 
+/// This tracks what we believe is true about the internal contract state.
+///
+/// We mirror calculations about balances etc that we expect the contract
+/// is making, which means we will be wrong if the token implements economics
+/// that differ from the example token.
+///
+/// This kind of state mirroring I would not generally do in a fuzz test
+/// but since the token interface is small and it can be used to test that
+/// multiple implementations behave in similar ways, I think it is worth
+/// the potential maintenance brittleness.
+///
+/// Since this state is persistent across transactions,
+/// it can not store anything containing an `Env`. Instead
+/// it can contain accessors that instantiate various contract
+/// types from any `Env`.
 pub struct ContractState {
     name: RustVec<u8>,
     symbol: RustVec<u8>,
@@ -341,6 +350,8 @@ impl ContractState {
     }
 }
 
+/// State that dependso on the `Env` and is reconstructed
+/// every transaction.
 struct CurrentState<'a> {
     admin: Address,
     accounts: Vec<Address>,
@@ -444,10 +455,7 @@ fn require_contract_addresses(addrs: &[Address]) -> bool {
     true
 }
 
-fn create_env() -> Env {
-    Env::default()
-}
-
+/// Produces a new `Env` after advancing some number of ledgers
 fn advance_env(prev_env: Env, ledgers: u32) -> Env {
     use soroban_sdk::testutils::Ledger as _;
 
@@ -460,6 +468,10 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
         .checked_mul(ledgers as u64)
         .expect("end of time");
 
+    /// We can either advance the ledger by
+    /// completely reconstructing the `Env` from a snapshot (prefered),
+    /// or by just frobbing the ledger of the storage and preserving
+    /// the same `Env`.
     let use_snapshot = true;
 
     if !use_snapshot {
@@ -501,8 +513,14 @@ fn advance_time_to(
     config: &Config,
     mut env: Env,
     token_contract_id_bytes: &[u8],
-    to_ledger: u32,
+    ledgers: u32,
 ) -> Env {
+    let to_ledger = env
+        .ledger()
+        .sequence()
+        .checked_add(ledgers)
+        .expect("end of time");
+
     loop {
         let curr_ledger = env.ledger().get().sequence_number;
         assert!(curr_ledger < to_ledger);
@@ -568,10 +586,12 @@ possible assertions
 // - make assertions about name/decimals/symbol
 // - assertions about negative amounts
 - predict if a call will succeed based on ContractState
+- assert about emitted events
 
 todo
 
 - use auths correctly
 - allow other address types
+- 
 
 */

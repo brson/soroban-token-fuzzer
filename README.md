@@ -95,19 +95,20 @@ internal state, including information about mints, burns, allowances and balance
 
 After every step various invariants are asserted:
 
-- All current balances are equal to the fuzzer's own accounting of balances.
-- All current balances are greater than 0.
-- All pairs of addresses have allowance equal to the fuzzer's own accounting of allowances.
 - The sum of all balances is equal to the sum of mints minus the sum of burns.
-- The results of the `name`, `symbol` and `decimals`
-  methods have not changed.
-- Contract calls do not panic.
+- All pairs of addresses have allowance equal to the fuzzer's own accounting of allowances.
+- All current balances are greater than 0.
+- All current balances are equal to the fuzzer's own accounting of balances.
+- Contract calls do not panic (unless it's with `panic_with_error!`).
   An error of type [`WasmVm`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorType.html#variant.WasmVm)
   and code [`InvalidAction`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorCode.html#variant.InvalidAction)
   is considered a panic,
   as that is what the runtime generates on panic.
+- Math does not overflow (detected as a panic).
 - For `approve`, `transfer`, `transfer_from`, `burn_from`, `burn`,
   if the input amount is negative, the call returns an error.
+- The results of the `name`, `symbol` and `decimals`
+  methods have not changed.
 
 
 ## What is yet to be tested?
@@ -120,6 +121,9 @@ After every step various invariants are asserted:
 - More assertions about negative numbers in various situations.
 - More assertions about expected results of individual calls.
 - Intentionally expiring allowances, the contract etc.
+- Assertions about expected events.
+- Comparison to reference implementation
+  - We can test that many tokens all have the same / similar behavior as a reference implementation
 
 
 ## Tips for writing fuzzable Soroban contracts
