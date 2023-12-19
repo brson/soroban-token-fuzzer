@@ -13,12 +13,18 @@ use soroban_sdk::testutils::{
     Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo, Logs,
     MockAuth, MockAuthInvoke,
 };
-use soroban_sdk::xdr::{AccountId, Hash, PublicKey, ScAddress, ScErrorCode, ScErrorType, Uint256};
+use soroban_sdk::xdr::{
+    AccountEntry, AccountEntryExt, AccountId, AlphaNum4, AssetCode4, Hash, LedgerEntry,
+    LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyTrustLine, PublicKey,
+    ScAddress, ScErrorCode, ScErrorType, SequenceNumber, Signer, SignerKey, Thresholds,
+    TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256,
+};
 use soroban_sdk::{
     token::{Client, StellarAssetClient},
     Address, Bytes, Env, Error, FromVal, IntoVal, InvokeError, String, TryFromVal, Val,
 };
 use std::collections::BTreeMap;
+use std::rc::Rc;
 use std::vec::Vec as RustVec;
 
 // Don't know where this number comes from.
@@ -37,14 +43,17 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
     let token_contract_id_bytes: RustVec<u8>;
 
-    // Do initial setup, including registering the contract.
-    let addresses = generate_addresses_from_seed(&env, input.address_seed, &input.address_types);
+    {
+        // Do initial setup, including registering the contract.
+        let addresses =
+            generate_addresses_from_seed(&env, input.address_seed, &input.address_types, true);
 
-    let admin = &addresses[0];
+        let admin = &addresses[0];
 
-    let token_contract_id = config.register_contract_init(&env, admin);
-    token_contract_id_bytes = address_to_bytes(&token_contract_id);
-
+        let token_contract_id = config.register_contract_init(&env, admin);
+        token_contract_id_bytes = address_to_bytes(&token_contract_id);
+    }
+    
     let mut contract_state = ContractState::init(&env);
     let mut current_state = CurrentState::new(
         &env,
@@ -74,7 +83,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         contract_state.symbol = string_to_bytes(token_client.symbol());
         contract_state.decimals = token_client.decimals();
 
-        // println!("------- command: {:#?}\n--------", command);
+        // println!("------- command: {:#?}", command);
         match command {
             Command::Mint(input) => {
                 let r = admin_client.try_mint(&accounts[input.to_account_index], &input.amount);
@@ -222,8 +231,8 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                         contract_state.sum_of_burns + &BigInt::from(input.amount);
                 }
             }
-            Command::AdvanceLedgers(input) => {
-                env = advance_time_to(&config, env, &token_contract_id_bytes, input.ledgers);
+            Command::AdvanceLedgers(cmd_input) => {
+                env = advance_time_to(&config, env, &token_contract_id_bytes, cmd_input.ledgers);
                 // NB: This env is reconstructed and all previous env-based objects are invalid
 
                 current_state = CurrentState::new(
@@ -365,7 +374,7 @@ impl<'a> CurrentState<'a> {
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
-        let accounts = generate_addresses_from_seed(env, address_seed, address_types);
+        let accounts = generate_addresses_from_seed(env, address_seed, address_types, false);
 
         let admin = accounts[0].clone();
 
@@ -573,6 +582,7 @@ fn generate_addresses_from_seed(
     env: &Env,
     address_seed: u64,
     address_types: &[AddressType; NUMBER_OF_ADDRESSES],
+    init_accounts: bool,
 ) -> RustVec<Address> {
     let mut addresses = RustVec::<Address>::new();
 
@@ -592,6 +602,12 @@ fn generate_addresses_from_seed(
                 let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
                     signing_key.verifying_key().to_bytes(),
                 )));
+
+                if init_accounts {
+                    create_default_test_account(env, &account_id, vec![(&signing_key, 100)]);
+                    create_default_trustline(env, &account_id);
+                }
+
                 let sc_address = ScAddress::Account(account_id);
                 let address = Address::try_from_val(env, &sc_address).unwrap();
                 address
@@ -605,6 +621,95 @@ fn generate_addresses_from_seed(
     }
 
     addresses
+}
+
+fn create_default_test_account(
+    env: &Env,
+    account_id: &AccountId,
+    signers: Vec<(&SigningKey, u32)>,
+) {
+    let key = LedgerKey::Account(LedgerKeyAccount {
+        account_id: account_id.clone(),
+    });
+    let mut acc_signers = vec![];
+    for (signer, weight) in signers {
+        acc_signers.push(Signer {
+            key: SignerKey::Ed25519(Uint256(signer.verifying_key().to_bytes())),
+            weight,
+        });
+    }
+
+    let ext = AccountEntryExt::V0;
+    let acc_entry = AccountEntry {
+        account_id: account_id.clone(),
+        balance: 10_000_000,
+        seq_num: SequenceNumber(0),
+        num_sub_entries: 0,
+        inflation_dest: None,
+        flags: 0,
+        home_domain: Default::default(),
+        thresholds: Thresholds([1, 0, 0, 0]),
+        signers: acc_signers.try_into().unwrap(),
+        ext,
+    };
+
+    env.host().with_mut_storage(|storage| {
+        storage.put(
+            &Rc::new(key),
+            &Rc::new(LedgerEntry {
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::Account(acc_entry),
+                ext: LedgerEntryExt::V0,
+            }),
+            None,
+            soroban_env_host::budget::AsBudget::as_budget(env.host()),
+        )
+    });
+}
+
+fn create_default_trustline(env: &Env, account_id: &AccountId) {
+    let seed: [u8; 32] = [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1,
+    ];
+
+    let issuer = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(seed)));
+    let asset = TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+        asset_code: AssetCode4([b'a', b'a', b'a', 0]),
+        issuer: issuer,
+    });
+
+    let key = LedgerKey::Trustline(LedgerKeyTrustLine {
+        account_id: account_id.clone(),
+        asset: asset.clone(),
+    });
+
+    let flags =
+        TrustLineFlags::AuthorizedFlag as u32 | TrustLineFlags::TrustlineClawbackEnabledFlag as u32;
+
+    let ext = TrustLineEntryExt::V0;
+
+    let trustline_entry = TrustLineEntry {
+        account_id: account_id.clone(),
+        asset,
+        balance: 0,
+        limit: i64::MAX,
+        flags,
+        ext,
+    };
+
+    env.host().with_mut_storage(|storage| {
+        storage.put(
+            &Rc::new(key),
+            &Rc::new(LedgerEntry {
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::Trustline(trustline_entry),
+                ext: LedgerEntryExt::V0,
+            }),
+            None,
+            soroban_env_host::budget::AsBudget::as_budget(env.host()),
+        )
+    });
 }
 
 /*
