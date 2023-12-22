@@ -45,15 +45,26 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
     {
         // Do initial setup, including registering the contract.
-        let addresses =
-            generate_addresses_from_seed(&env, input.address_seed, &input.address_types, true);
+        let address_pairs =
+            generate_addresses_from_seed(&env, input.address_seed, &input.address_types);
+        address_pairs.iter().for_each(|(addr, seed)| {
+            let sc_addr = ScAddress::try_from(addr).unwrap();
+            match sc_addr {
+                ScAddress::Account(account_id) => {
+                    let signing_key = SigningKey::from_bytes(seed);
+                    create_default_account(&env, &account_id, vec![(&signing_key, 100)]);
+                    create_default_trustline(&env, &account_id);
+                }
+                ScAddress::Contract(_) => {}
+            }
+        });
 
-        let admin = &addresses[0];
+        let admin = &address_pairs[0].0;
 
         let token_contract_id = config.register_contract_init(&env, admin);
         token_contract_id_bytes = address_to_bytes(&token_contract_id);
     }
-    
+
     let mut contract_state = ContractState::init(&env);
     let mut current_state = CurrentState::new(
         &env,
@@ -374,9 +385,11 @@ impl<'a> CurrentState<'a> {
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
-        let accounts = generate_addresses_from_seed(env, address_seed, address_types, false);
+        let address_pairs = generate_addresses_from_seed(env, address_seed, address_types);
 
-        let admin = accounts[0].clone();
+        let admin = address_pairs[0].0.clone();
+        let accounts: RustVec<Address> =
+            address_pairs.iter().map(|(addr, _)| addr.clone()).collect();
 
         CurrentState {
             admin,
@@ -582,9 +595,8 @@ fn generate_addresses_from_seed(
     env: &Env,
     address_seed: u64,
     address_types: &[AddressType; NUMBER_OF_ADDRESSES],
-    init_accounts: bool,
-) -> RustVec<Address> {
-    let mut addresses = RustVec::<Address>::new();
+) -> RustVec<(Address, [u8; 32])> {
+    let mut addresses = RustVec::<(Address, [u8; 32])>::new();
 
     for i in 0..NUMBER_OF_ADDRESSES {
         let seed = address_seed
@@ -603,11 +615,6 @@ fn generate_addresses_from_seed(
                     signing_key.verifying_key().to_bytes(),
                 )));
 
-                if init_accounts {
-                    create_default_test_account(env, &account_id, vec![(&signing_key, 100)]);
-                    create_default_trustline(env, &account_id);
-                }
-
                 let sc_address = ScAddress::Account(account_id);
                 let address = Address::try_from_val(env, &sc_address).unwrap();
                 address
@@ -617,17 +624,13 @@ fn generate_addresses_from_seed(
             }
         };
 
-        addresses.push(address);
+        addresses.push((address, seed));
     }
 
     addresses
 }
 
-fn create_default_test_account(
-    env: &Env,
-    account_id: &AccountId,
-    signers: Vec<(&SigningKey, u32)>,
-) {
+fn create_default_account(env: &Env, account_id: &AccountId, signers: Vec<(&SigningKey, u32)>) {
     let key = LedgerKey::Account(LedgerKeyAccount {
         account_id: account_id.clone(),
     });
