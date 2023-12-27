@@ -16,12 +16,6 @@ pub struct Input {
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub enum AddressType {
-    Account,
-    Contract,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub enum Command {
     Mint(MintInput),
     Approve(ApproveInput),

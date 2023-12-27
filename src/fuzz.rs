@@ -1,5 +1,6 @@
 use crate::input::*;
 use crate::config::*;
+use crate::util::*;
 use crate::DAY_IN_LEDGERS;
 use crate::addrgen::AddressGenerator;
 use itertools::Itertools;
@@ -10,7 +11,7 @@ use soroban_sdk::xdr::{
     ScErrorCode, ScErrorType,
 };
 use soroban_sdk::{
-    token::Client, Address, Bytes, Env, Error, InvokeError, String, TryFromVal, Val,
+    token::Client, Address, Bytes, Env, Error, InvokeError, TryFromVal, Val,
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
@@ -27,16 +28,19 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     }
 
     //eprintln!("input: {input:#?}");
+
+    // The initial Env. This will be destroyed and recreated when we advance time,
+    // to simulate distinct transactions.
     let mut env = Env::default();
 
     let token_contract_id_bytes: RustVec<u8>;
 
+    // Do initial setup, including registering the contract.
     {
-        // Do initial setup, including registering the contract.
         input.address_generator.setup_account_storage(&env);
 
-        let address_pairs = input.address_generator.generate_addresses(&env);
-        let admin = &address_pairs[0].0;
+        let addresses = input.address_generator.generate_addresses(&env);
+        let admin = &addresses[0];
 
         let token_contract_id = config.register_contract_init(&env, admin);
         token_contract_id_bytes = address_to_bytes(&token_contract_id);
@@ -359,10 +363,7 @@ impl<'a> CurrentState<'a> {
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
-        let address_pairs = address_generator.generate_addresses(env);
-
-        let accounts: RustVec<Address> =
-            address_pairs.iter().map(|(addr, _)| addr.clone()).collect();
+        let accounts = address_generator.generate_addresses(env);
 
         CurrentState {
             accounts,
@@ -404,13 +405,6 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
         .sum();
 
     assert_eq!(sum_of_balances_0, sum_of_balances_1);
-}
-
-fn string_to_bytes(s: String) -> RustVec<u8> {
-    let mut out = vec![0; s.len() as usize];
-    s.copy_into_slice(&mut out);
-
-    out
 }
 
 /// Produces a new `Env` after advancing some number of ledgers
@@ -509,13 +503,6 @@ fn advance_time_to(
     }
 
     env
-}
-
-fn address_to_bytes(addr: &Address) -> RustVec<u8> {
-    let addr_str = addr.to_string();
-    let mut buf = vec![0; addr_str.len() as usize];
-    addr_str.copy_into_slice(&mut buf);
-    buf
 }
 
 fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
