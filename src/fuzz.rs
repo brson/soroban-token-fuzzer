@@ -1,5 +1,4 @@
 use crate::input::*;
-
 use crate::config::*;
 use crate::DAY_IN_LEDGERS;
 use ed25519_dalek::SigningKey;
@@ -93,6 +92,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 let r = admin_client.try_mint(&accounts[input.to_account_index], &input.amount);
 
                 log_result("mint", &r);
+
                 if input.amount < 0 {
                     assert!(r.is_err());
                 }
@@ -218,13 +218,13 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
             Command::Burn(input) => {
                 let r = token_client.try_burn(&accounts[input.from_account_index], &input.amount);
 
+                log_result("burn", &r);
+
                 if input.amount < 0 {
                     assert!(r.is_err());
                 }
 
                 verify_token_contract_result(&env, &r);
-
-                log_result("burn", &r);
 
                 if let Ok(r) = r {
                     let _r = r.expect("ok");
