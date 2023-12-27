@@ -2,16 +2,12 @@ use crate::input::*;
 
 use crate::config::*;
 use crate::DAY_IN_LEDGERS;
-use arbitrary::Unstructured;
 use ed25519_dalek::SigningKey;
 use itertools::Itertools;
-use libfuzzer_sys::{fuzz_target, Corpus};
+use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
-use soroban_ledger_snapshot::LedgerSnapshot;
 use soroban_sdk::testutils::{
-    arbitrary::{arbitrary, SorobanArbitrary},
-    Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger, LedgerInfo, Logs,
-    MockAuth, MockAuthInvoke,
+    Address as _, Events, Ledger,
 };
 use soroban_sdk::xdr::{
     AccountEntry, AccountEntryExt, AccountId, AlphaNum4, AssetCode4, Hash, LedgerEntry,
@@ -20,8 +16,8 @@ use soroban_sdk::xdr::{
     TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256,
 };
 use soroban_sdk::{
-    token::{Client, StellarAssetClient},
-    Address, Bytes, Env, Error, FromVal, IntoVal, InvokeError, String, TryFromVal, Val,
+    token::Client,
+    Address, Bytes, Env, Error, InvokeError, String, TryFromVal, Val,
 };
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -65,7 +61,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         token_contract_id_bytes = address_to_bytes(&token_contract_id);
     }
 
-    let mut contract_state = ContractState::init(&env);
+    let mut contract_state = ContractState::init();
     let mut current_state = CurrentState::new(
         &env,
         &config,
@@ -107,7 +103,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
-                    let r = r.unwrap();
+                    let _r = r.expect("ok");
 
                     contract_state.add_balance(&accounts[input.to_account_index], input.amount);
 
@@ -132,7 +128,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
-                    let r = r.unwrap();
+                    let _r = r.expect("ok");
 
                     contract_state.set_allowance(
                         &accounts[input.from_account_index],
@@ -158,7 +154,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
-                    let r = r.unwrap();
+                    let _r = r.expect("ok");
 
                     contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
                     contract_state.add_balance(&accounts[input.to_account_index], input.amount);
@@ -186,7 +182,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
-                    let r = r.unwrap();
+                    let _r = r.expect("ok");
 
                     contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
                     contract_state.add_balance(&accounts[input.to_account_index], input.amount);
@@ -208,7 +204,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 verify_token_contract_result(&env, &r);
 
                 if let Ok(r) = r {
-                    let r = r.unwrap();
+                    let _r = r.expect("ok");
 
                     contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
 
@@ -234,7 +230,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 log_result("burn", &r);
 
                 if let Ok(r) = r {
-                    let r = r.unwrap();
+                    let _r = r.expect("ok");
 
                     contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
 
@@ -306,7 +302,7 @@ pub struct ContractState {
 }
 
 impl ContractState {
-    fn init(env: &Env) -> Self {
+    fn init() -> Self {
         ContractState {
             name: Vec::<u8>::new(),
             symbol: Vec::<u8>::new(),
@@ -366,7 +362,6 @@ impl ContractState {
 /// State that dependso on the `Env` and is reconstructed
 /// every transaction.
 struct CurrentState<'a> {
-    admin: Address,
     accounts: Vec<Address>,
     admin_client: Box<dyn TokenAdminClient<'a> + 'a>,
     token_client: Client<'a>,
@@ -387,12 +382,10 @@ impl<'a> CurrentState<'a> {
 
         let address_pairs = generate_addresses_from_seed(env, address_seed, address_types);
 
-        let admin = address_pairs[0].0.clone();
         let accounts: RustVec<Address> =
             address_pairs.iter().map(|(addr, _)| addr.clone()).collect();
 
         CurrentState {
-            admin,
             accounts,
             admin_client,
             token_client,
@@ -441,34 +434,6 @@ fn string_to_bytes(s: String) -> RustVec<u8> {
     out
 }
 
-fn require_unique_addresses(addrs: &[Address]) -> bool {
-    for addr1 in addrs {
-        let count = addrs.iter().filter(|a| a == &addr1).count();
-        if count > 1 {
-            return false;
-        }
-    }
-    true
-}
-
-fn require_contract_addresses(addrs: &[Address]) -> bool {
-    use stellar_strkey::*;
-    for addr in addrs {
-        let addr_string = addr.to_string();
-        let mut addr_buf = vec![0; addr_string.len() as usize];
-        addr_string.copy_into_slice(&mut addr_buf);
-        let addr_string = std::str::from_utf8(&addr_buf).unwrap();
-        let strkey = Strkey::from_string(&addr_string).unwrap();
-        match strkey {
-            Strkey::Contract(_) => {}
-            _ => {
-                return false;
-            }
-        }
-    }
-    true
-}
-
 /// Produces a new `Env` after advancing some number of ledgers
 fn advance_env(prev_env: Env, ledgers: u32) -> Env {
     use soroban_sdk::testutils::Ledger as _;
@@ -482,14 +447,14 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
         .checked_mul(ledgers as u64)
         .expect("end of time");
 
-    /// We can either advance the ledger by
-    /// completely reconstructing the `Env` from a snapshot (prefered),
-    /// or by just frobbing the ledger of the storage and preserving
-    /// the same `Env`.
+    // We can either advance the ledger by
+    // completely reconstructing the `Env` from a snapshot (prefered),
+    // or by just frobbing the ledger of the storage and preserving
+    // the same `Env`.
     let use_snapshot = true;
 
     if !use_snapshot {
-        let mut env = prev_env.clone();
+        let env = prev_env.clone();
         env.ledger().with_mut(|ledger| {
             ledger.sequence_number = ledger
                 .sequence_number
@@ -667,7 +632,7 @@ fn create_default_account(env: &Env, account_id: &AccountId, signers: Vec<(&Sign
             None,
             soroban_env_host::budget::AsBudget::as_budget(env.host()),
         )
-    });
+    }).expect("ok");
 }
 
 fn create_default_trustline(env: &Env, account_id: &AccountId) {
@@ -712,23 +677,5 @@ fn create_default_trustline(env: &Env, account_id: &AccountId) {
             None,
             soroban_env_host::budget::AsBudget::as_budget(env.host()),
         )
-    });
+    }).expect("ok");
 }
-
-/*
-
-possible assertions
-
-// - allowances can't be greater than balance?
-// - no negative balances?
-// - make assertions about name/decimals/symbol
-// - assertions about negative amounts
-- predict if a call will succeed based on ContractState
-- assert about emitted events
-
-todo
-
-- use auths correctly
-// - allow other address types
-
-*/

@@ -1,4 +1,3 @@
-use soroban_sdk::testutils::ContractFunctionSet;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::SorobanAuthorizationEntry;
 use soroban_sdk::{Address, Env};
@@ -57,7 +56,7 @@ pub trait TokenAdminClient<'a> {
     ///
     /// This is just defined to make sure the lifetimes work;
     /// we don't actually need to implement it yet.
-    fn set_auths(&self, auths: &'a [SorobanAuthorizationEntry]) -> Box<dyn TokenAdminClient> {
+    fn set_auths(&self, _auths: &'a [SorobanAuthorizationEntry]) -> Box<dyn TokenAdminClient> {
         todo!()
     }
 }
@@ -116,7 +115,7 @@ impl<'a> TokenAdminClient<'a> for NativeTokenAdminClient<'a> {
         self.admin_client.try_mint(to, amount)
     }
 
-    fn set_auths(&self, auths: &'a [SorobanAuthorizationEntry]) -> Box<dyn TokenAdminClient> {
+    fn set_auths(&self, _auths: &'a [SorobanAuthorizationEntry]) -> Box<dyn TokenAdminClient> {
         todo!()
     }
 }
