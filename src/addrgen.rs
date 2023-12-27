@@ -1,16 +1,16 @@
-use std::rc::Rc;
-use arbitrary::Unstructured;
-use soroban_sdk::testutils::arbitrary::arbitrary;
-use std::vec::Vec as RustVec;
 use crate::input::NUMBER_OF_ADDRESSES;
-use soroban_sdk::{Env, Address, TryFromVal};
+use arbitrary::Unstructured;
 use ed25519_dalek::SigningKey;
+use soroban_sdk::testutils::arbitrary::arbitrary;
 use soroban_sdk::xdr::{
     AccountEntry, AccountEntryExt, AccountId, AlphaNum4, AssetCode4, Hash, LedgerEntry,
     LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyTrustLine, PublicKey,
-    ScAddress, SequenceNumber, Signer, SignerKey, Thresholds,
-    TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256,
+    ScAddress, SequenceNumber, Signer, SignerKey, Thresholds, TrustLineAsset, TrustLineEntry,
+    TrustLineEntryExt, TrustLineFlags, Uint256,
 };
+use soroban_sdk::{Address, Env, TryFromVal};
+use std::rc::Rc;
+use std::vec::Vec as RustVec;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct AddressGenerator {
@@ -26,21 +26,19 @@ pub enum AddressType {
 }
 
 impl AddressGenerator {
-    pub fn generate_addresses(
-        &self,
-        env: &Env
-    ) -> RustVec<Address> {
-        self.generate_addresses_with_bytes(env).into_iter().map(|(a, _)| a).collect()
+    pub fn generate_addresses(&self, env: &Env) -> RustVec<Address> {
+        self.generate_addresses_with_bytes(env)
+            .into_iter()
+            .map(|(a, _)| a)
+            .collect()
     }
 
-    fn generate_addresses_with_bytes(
-        &self,
-        env: &Env
-    ) -> RustVec<(Address, [u8; 32])> {
+    fn generate_addresses_with_bytes(&self, env: &Env) -> RustVec<(Address, [u8; 32])> {
         let mut addresses = RustVec::<(Address, [u8; 32])>::new();
 
         for i in 0..NUMBER_OF_ADDRESSES {
-            let seed = self.address_seed
+            let seed = self
+                .address_seed
                 .checked_add(i as u64)
                 .expect("Overflow")
                 .to_be_bytes();
@@ -177,4 +175,3 @@ fn create_default_trustline(env: &Env, account_id: &AccountId) {
         })
         .expect("ok");
 }
-

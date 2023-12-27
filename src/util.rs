@@ -1,4 +1,4 @@
-use soroban_sdk::{String, Address};
+use soroban_sdk::{Address, String};
 use std::vec::Vec as RustVec;
 
 pub fn string_to_bytes(s: String) -> RustVec<u8> {
@@ -14,4 +14,3 @@ pub fn address_to_bytes(addr: &Address) -> RustVec<u8> {
     addr_str.copy_into_slice(&mut buf);
     buf
 }
-

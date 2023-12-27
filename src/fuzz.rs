@@ -1,18 +1,14 @@
-use crate::input::*;
+use crate::addrgen::AddressGenerator;
 use crate::config::*;
+use crate::input::*;
 use crate::util::*;
 use crate::DAY_IN_LEDGERS;
-use crate::addrgen::AddressGenerator;
 use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
-use soroban_sdk::xdr::{
-    ScErrorCode, ScErrorType,
-};
-use soroban_sdk::{
-    token::Client, Address, Bytes, Env, Error, InvokeError, TryFromVal, Val,
-};
+use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
+use soroban_sdk::{token::Client, Address, Bytes, Env, Error, InvokeError, TryFromVal, Val};
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
 
@@ -72,17 +68,17 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
         for command in transaction.commands {
             // println!("------- command: {:#?}", command);
-            exec_command(
-                &command,
-                &env,
-                &mut contract_state,
-                &current_state,
-            );
+            exec_command(&command, &env, &mut contract_state, &current_state);
         }
 
         // Advance time and begin new transaction
         {
-            env = advance_time(&config, env, &token_contract_id_bytes, transaction.advance_ledgers);
+            env = advance_time(
+                &config,
+                env,
+                &token_contract_id_bytes,
+                transaction.advance_ledgers,
+            );
             // NB: This env is reconstructed and all previous env-based objects are invalid
 
             current_state = CurrentState::new(
@@ -104,11 +100,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                     let actual_allowance = current_state.token_client.allowance(addr1, addr2);
                     if actual_allowance == 0 && expected_allowance != 0 {
                         // Assume the allowance expired.
-                        contract_state.set_allowance(
-                            addr1,
-                            addr2,
-                            actual_allowance,
-                        );
+                        contract_state.set_allowance(addr1, addr2, actual_allowance);
                     }
                 }
             }
