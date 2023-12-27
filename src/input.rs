@@ -1,8 +1,6 @@
 use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
-use soroban_sdk::testutils::{
-    arbitrary::arbitrary,
-};
+use soroban_sdk::testutils::arbitrary::arbitrary;
 use std::vec::Vec as RustVec;
 
 pub const NUMBER_OF_ADDRESSES: usize = 3;

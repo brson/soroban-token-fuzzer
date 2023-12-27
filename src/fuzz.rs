@@ -6,9 +6,7 @@ use ed25519_dalek::SigningKey;
 use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
-use soroban_sdk::testutils::{
-    Address as _, Events, Ledger,
-};
+use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::xdr::{
     AccountEntry, AccountEntryExt, AccountId, AlphaNum4, AssetCode4, Hash, LedgerEntry,
     LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyTrustLine, PublicKey,
@@ -16,8 +14,7 @@ use soroban_sdk::xdr::{
     TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256,
 };
 use soroban_sdk::{
-    token::Client,
-    Address, Bytes, Env, Error, InvokeError, String, TryFromVal, Val,
+    token::Client, Address, Bytes, Env, Error, InvokeError, String, TryFromVal, Val,
 };
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -621,18 +618,20 @@ fn create_default_account(env: &Env, account_id: &AccountId, signers: Vec<(&Sign
         ext,
     };
 
-    env.host().with_mut_storage(|storage| {
-        storage.put(
-            &Rc::new(key),
-            &Rc::new(LedgerEntry {
-                last_modified_ledger_seq: 0,
-                data: LedgerEntryData::Account(acc_entry),
-                ext: LedgerEntryExt::V0,
-            }),
-            None,
-            soroban_env_host::budget::AsBudget::as_budget(env.host()),
-        )
-    }).expect("ok");
+    env.host()
+        .with_mut_storage(|storage| {
+            storage.put(
+                &Rc::new(key),
+                &Rc::new(LedgerEntry {
+                    last_modified_ledger_seq: 0,
+                    data: LedgerEntryData::Account(acc_entry),
+                    ext: LedgerEntryExt::V0,
+                }),
+                None,
+                soroban_env_host::budget::AsBudget::as_budget(env.host()),
+            )
+        })
+        .expect("ok");
 }
 
 fn create_default_trustline(env: &Env, account_id: &AccountId) {
@@ -666,16 +665,18 @@ fn create_default_trustline(env: &Env, account_id: &AccountId) {
         ext,
     };
 
-    env.host().with_mut_storage(|storage| {
-        storage.put(
-            &Rc::new(key),
-            &Rc::new(LedgerEntry {
-                last_modified_ledger_seq: 0,
-                data: LedgerEntryData::Trustline(trustline_entry),
-                ext: LedgerEntryExt::V0,
-            }),
-            None,
-            soroban_env_host::budget::AsBudget::as_budget(env.host()),
-        )
-    }).expect("ok");
+    env.host()
+        .with_mut_storage(|storage| {
+            storage.put(
+                &Rc::new(key),
+                &Rc::new(LedgerEntry {
+                    last_modified_ledger_seq: 0,
+                    data: LedgerEntryData::Trustline(trustline_entry),
+                    ext: LedgerEntryExt::V0,
+                }),
+                None,
+                soroban_env_host::budget::AsBudget::as_budget(env.host()),
+            )
+        })
+        .expect("ok");
 }
