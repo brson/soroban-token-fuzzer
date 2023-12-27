@@ -12,7 +12,14 @@ pub const NUMBER_OF_ADDRESSES: usize = 3;
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct Input {
     pub address_generator: AddressGenerator,
+    pub transactions: RustVec<Transaction>,
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct Transaction {
     pub commands: RustVec<Command>,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(1..=DAY_IN_LEDGERS))]
+    pub advance_ledgers: u32,
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -23,7 +30,6 @@ pub enum Command {
     Transfer(TransferInput),
     BurnFrom(BurnFromInput),
     Burn(BurnInput),
-    AdvanceLedgers(AdvanceLedgersInput),
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -84,10 +90,4 @@ pub struct BurnInput {
     pub amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
-}
-
-#[derive(Clone, Debug, arbitrary::Arbitrary)]
-pub struct AdvanceLedgersInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(1..=DAY_IN_LEDGERS))]
-    pub ledgers: u32,
 }

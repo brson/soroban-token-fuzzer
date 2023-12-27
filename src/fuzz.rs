@@ -23,7 +23,7 @@ type TokenContractResult =
     Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
 
 pub fn fuzz_token(config: Config, input: Input) -> Corpus {
-    if input.commands.is_empty() {
+    if input.transactions.iter().all(|tx| tx.commands.is_empty()) {
         return Corpus::Reject;
     }
 
@@ -60,199 +60,203 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         results.push((name, r.is_ok()));
     };
 
-    for command in input.commands {
-        // The Env may be different for each step, so we need to reconstruct
-        // everything that depends on it.
-        env.mock_all_auths();
-        env.budget().reset_unlimited();
+    for transaction in input.transactions {
+        for command in transaction.commands {
+            // The Env may be different for each step, so we need to reconstruct
+            // everything that depends on it.
+            env.mock_all_auths();
+            env.budget().reset_unlimited();
 
-        let admin_client = &current_state.admin_client;
-        let token_client = &current_state.token_client;
-        let accounts = &current_state.accounts;
+            let admin_client = &current_state.admin_client;
+            let token_client = &current_state.token_client;
+            let accounts = &current_state.accounts;
 
-        contract_state.name = string_to_bytes(token_client.name());
-        contract_state.symbol = string_to_bytes(token_client.symbol());
-        contract_state.decimals = token_client.decimals();
+            contract_state.name = string_to_bytes(token_client.name());
+            contract_state.symbol = string_to_bytes(token_client.symbol());
+            contract_state.decimals = token_client.decimals();
 
-        // println!("------- command: {:#?}", command);
-        match command {
-            Command::Mint(input) => {
-                let r = admin_client.try_mint(&accounts[input.to_account_index], &input.amount);
+            // println!("------- command: {:#?}", command);
+            match command {
+                Command::Mint(input) => {
+                    let r = admin_client.try_mint(&accounts[input.to_account_index], &input.amount);
 
-                log_result("mint", &r);
+                    log_result("mint", &r);
 
-                if input.amount < 0 {
-                    assert!(r.is_err());
+                    if input.amount < 0 {
+                        assert!(r.is_err());
+                    }
+
+                    verify_token_contract_result(&env, &r);
+
+                    if let Ok(r) = r {
+                        let _r = r.expect("ok");
+
+                        contract_state.add_balance(&accounts[input.to_account_index], input.amount);
+
+                        contract_state.sum_of_mints =
+                            contract_state.sum_of_mints + BigInt::from(input.amount);
+                    }
                 }
-
-                verify_token_contract_result(&env, &r);
-
-                if let Ok(r) = r {
-                    let _r = r.expect("ok");
-
-                    contract_state.add_balance(&accounts[input.to_account_index], input.amount);
-
-                    contract_state.sum_of_mints =
-                        contract_state.sum_of_mints + BigInt::from(input.amount);
-                }
-            }
-            Command::Approve(input) => {
-                let r = token_client.try_approve(
-                    &accounts[input.from_account_index],
-                    &accounts[input.spender_account_index],
-                    &input.amount,
-                    &input.expiration_ledger,
-                );
-
-                log_result("approve", &r);
-
-                if input.amount < 0 {
-                    assert!(r.is_err());
-                }
-
-                verify_token_contract_result(&env, &r);
-
-                if let Ok(r) = r {
-                    let _r = r.expect("ok");
-
-                    contract_state.set_allowance(
+                Command::Approve(input) => {
+                    let r = token_client.try_approve(
                         &accounts[input.from_account_index],
                         &accounts[input.spender_account_index],
-                        input.amount,
-                    );
-                }
-            }
-            Command::TransferFrom(input) => {
-                let r = token_client.try_transfer_from(
-                    &accounts[input.spender_account_index],
-                    &accounts[input.from_account_index],
-                    &accounts[input.to_account_index],
-                    &input.amount,
-                );
-
-                log_result("transfer_from", &r);
-
-                if input.amount < 0 {
-                    assert!(r.is_err());
-                }
-
-                verify_token_contract_result(&env, &r);
-
-                if let Ok(r) = r {
-                    let _r = r.expect("ok");
-
-                    contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
-                    contract_state.add_balance(&accounts[input.to_account_index], input.amount);
-
-                    contract_state.sub_allowance(
-                        &accounts[input.from_account_index],
-                        &accounts[input.spender_account_index],
-                        input.amount,
-                    );
-                }
-            }
-            Command::Transfer(input) => {
-                let r = token_client.try_transfer(
-                    &accounts[input.from_account_index],
-                    &accounts[input.to_account_index],
-                    &input.amount,
-                );
-
-                log_result("transfer", &r);
-
-                if input.amount < 0 {
-                    assert!(r.is_err());
-                }
-
-                verify_token_contract_result(&env, &r);
-
-                if let Ok(r) = r {
-                    let _r = r.expect("ok");
-
-                    contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
-                    contract_state.add_balance(&accounts[input.to_account_index], input.amount);
-                }
-            }
-            Command::BurnFrom(input) => {
-                let r = token_client.try_burn_from(
-                    &accounts[input.spender_account_index],
-                    &accounts[input.from_account_index],
-                    &input.amount,
-                );
-
-                log_result("burn_from", &r);
-
-                if input.amount < 0 {
-                    assert!(r.is_err());
-                }
-
-                verify_token_contract_result(&env, &r);
-
-                if let Ok(r) = r {
-                    let _r = r.expect("ok");
-
-                    contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
-
-                    contract_state.sub_allowance(
-                        &accounts[input.from_account_index],
-                        &accounts[input.spender_account_index],
-                        input.amount,
+                        &input.amount,
+                        &input.expiration_ledger,
                     );
 
-                    contract_state.sum_of_burns =
-                        contract_state.sum_of_burns + &BigInt::from(input.amount);
-                }
-            }
-            Command::Burn(input) => {
-                let r = token_client.try_burn(&accounts[input.from_account_index], &input.amount);
+                    log_result("approve", &r);
 
-                log_result("burn", &r);
+                    if input.amount < 0 {
+                        assert!(r.is_err());
+                    }
 
-                if input.amount < 0 {
-                    assert!(r.is_err());
-                }
+                    verify_token_contract_result(&env, &r);
 
-                verify_token_contract_result(&env, &r);
+                    if let Ok(r) = r {
+                        let _r = r.expect("ok");
 
-                if let Ok(r) = r {
-                    let _r = r.expect("ok");
-
-                    contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
-
-                    contract_state.sum_of_burns =
-                        contract_state.sum_of_burns + &BigInt::from(input.amount);
-                }
-            }
-            Command::AdvanceLedgers(cmd_input) => {
-                env = advance_time_to(&config, env, &token_contract_id_bytes, cmd_input.ledgers);
-                // NB: This env is reconstructed and all previous env-based objects are invalid
-
-                current_state = CurrentState::new(
-                    &env,
-                    &config,
-                    &token_contract_id_bytes,
-                    &input.address_generator,
-                );
-
-                // update saved allowance number after advance ledgers
-                // fixme track expiration ledger instead of asking the contract
-                {
-                    let pairs = current_state
-                        .accounts
-                        .iter()
-                        .cartesian_product(current_state.accounts.iter());
-                    for (addr1, addr2) in pairs {
                         contract_state.set_allowance(
-                            addr1,
-                            addr2,
-                            current_state.token_client.allowance(addr1, addr2),
+                            &accounts[input.from_account_index],
+                            &accounts[input.spender_account_index],
+                            input.amount,
                         );
+                    }
+                }
+                Command::TransferFrom(input) => {
+                    let r = token_client.try_transfer_from(
+                        &accounts[input.spender_account_index],
+                        &accounts[input.from_account_index],
+                        &accounts[input.to_account_index],
+                        &input.amount,
+                    );
+
+                    log_result("transfer_from", &r);
+
+                    if input.amount < 0 {
+                        assert!(r.is_err());
+                    }
+
+                    verify_token_contract_result(&env, &r);
+
+                    if let Ok(r) = r {
+                        let _r = r.expect("ok");
+
+                        contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
+                        contract_state.add_balance(&accounts[input.to_account_index], input.amount);
+
+                        contract_state.sub_allowance(
+                            &accounts[input.from_account_index],
+                            &accounts[input.spender_account_index],
+                            input.amount,
+                        );
+                    }
+                }
+                Command::Transfer(input) => {
+                    let r = token_client.try_transfer(
+                        &accounts[input.from_account_index],
+                        &accounts[input.to_account_index],
+                        &input.amount,
+                    );
+
+                    log_result("transfer", &r);
+
+                    if input.amount < 0 {
+                        assert!(r.is_err());
+                    }
+
+                    verify_token_contract_result(&env, &r);
+
+                    if let Ok(r) = r {
+                        let _r = r.expect("ok");
+
+                        contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
+                        contract_state.add_balance(&accounts[input.to_account_index], input.amount);
+                    }
+                }
+                Command::BurnFrom(input) => {
+                    let r = token_client.try_burn_from(
+                        &accounts[input.spender_account_index],
+                        &accounts[input.from_account_index],
+                        &input.amount,
+                    );
+
+                    log_result("burn_from", &r);
+
+                    if input.amount < 0 {
+                        assert!(r.is_err());
+                    }
+
+                    verify_token_contract_result(&env, &r);
+
+                    if let Ok(r) = r {
+                        let _r = r.expect("ok");
+
+                        contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
+
+                        contract_state.sub_allowance(
+                            &accounts[input.from_account_index],
+                            &accounts[input.spender_account_index],
+                            input.amount,
+                        );
+
+                        contract_state.sum_of_burns =
+                            contract_state.sum_of_burns + &BigInt::from(input.amount);
+                    }
+                }
+                Command::Burn(input) => {
+                    let r = token_client.try_burn(&accounts[input.from_account_index], &input.amount);
+
+                    log_result("burn", &r);
+
+                    if input.amount < 0 {
+                        assert!(r.is_err());
+                    }
+
+                    verify_token_contract_result(&env, &r);
+
+                    if let Ok(r) = r {
+                        let _r = r.expect("ok");
+
+                        contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
+
+                        contract_state.sum_of_burns =
+                            contract_state.sum_of_burns + &BigInt::from(input.amount);
                     }
                 }
             }
         }
 
-        assert_state(&contract_state, &current_state);
+        // Advance time and begin new transaction
+        {
+            env = advance_time_to(&config, env, &token_contract_id_bytes, transaction.advance_ledgers);
+            // NB: This env is reconstructed and all previous env-based objects are invalid
+
+            current_state = CurrentState::new(
+                &env,
+                &config,
+                &token_contract_id_bytes,
+                &input.address_generator,
+            );
+
+            // update saved allowance number after advance ledgers
+            // fixme track expiration ledger instead of asking the contract
+            {
+                let pairs = current_state
+                    .accounts
+                    .iter()
+                    .cartesian_product(current_state.accounts.iter());
+                for (addr1, addr2) in pairs {
+                    contract_state.set_allowance(
+                        addr1,
+                        addr2,
+                        current_state.token_client.allowance(addr1, addr2),
+                    );
+                }
+            }
+
+            assert_state(&contract_state, &current_state);
+        }
     }
 
     // eprintln!("results: {results:?}");
