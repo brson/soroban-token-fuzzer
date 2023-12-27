@@ -2,6 +2,7 @@ use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
 use soroban_sdk::testutils::arbitrary::arbitrary;
 use std::vec::Vec as RustVec;
+use crate::addrgen::AddressGenerator;
 
 pub const NUMBER_OF_ADDRESSES: usize = 3;
 
@@ -10,9 +11,7 @@ pub const NUMBER_OF_ADDRESSES: usize = 3;
 /// It consists of addresses and a series of commands that operate on them.
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct Input {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(u64::MIN..=u64::MAX - NUMBER_OF_ADDRESSES as u64))]
-    pub address_seed: u64,
-    pub address_types: [AddressType; NUMBER_OF_ADDRESSES],
+    pub address_generator: AddressGenerator,
     pub commands: RustVec<Command>,
 }
 

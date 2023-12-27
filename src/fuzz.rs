@@ -1,22 +1,18 @@
 use crate::input::*;
 use crate::config::*;
 use crate::DAY_IN_LEDGERS;
-use ed25519_dalek::SigningKey;
+use crate::addrgen::AddressGenerator;
 use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::xdr::{
-    AccountEntry, AccountEntryExt, AccountId, AlphaNum4, AssetCode4, Hash, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyTrustLine, PublicKey,
-    ScAddress, ScErrorCode, ScErrorType, SequenceNumber, Signer, SignerKey, Thresholds,
-    TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256,
+    ScErrorCode, ScErrorType,
 };
 use soroban_sdk::{
     token::Client, Address, Bytes, Env, Error, InvokeError, String, TryFromVal, Val,
 };
 use std::collections::BTreeMap;
-use std::rc::Rc;
 use std::vec::Vec as RustVec;
 
 // Don't know where this number comes from.
@@ -37,20 +33,9 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
     {
         // Do initial setup, including registering the contract.
-        let address_pairs =
-            generate_addresses_from_seed(&env, input.address_seed, &input.address_types);
-        address_pairs.iter().for_each(|(addr, seed)| {
-            let sc_addr = ScAddress::try_from(addr).unwrap();
-            match sc_addr {
-                ScAddress::Account(account_id) => {
-                    let signing_key = SigningKey::from_bytes(seed);
-                    create_default_account(&env, &account_id, vec![(&signing_key, 100)]);
-                    create_default_trustline(&env, &account_id);
-                }
-                ScAddress::Contract(_) => {}
-            }
-        });
+        input.address_generator.setup_account_storage(&env);
 
+        let address_pairs = input.address_generator.generate_addresses(&env);
         let admin = &address_pairs[0].0;
 
         let token_contract_id = config.register_contract_init(&env, admin);
@@ -62,8 +47,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         &env,
         &config,
         &token_contract_id_bytes,
-        input.address_seed,
-        &input.address_types,
+        &input.address_generator,
     );
 
     let mut results: Vec<(&'static str, bool)> = vec![];
@@ -243,8 +227,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                     &env,
                     &config,
                     &token_contract_id_bytes,
-                    input.address_seed,
-                    &input.address_types,
+                    &input.address_generator,
                 );
 
                 // update saved allowance number after advance ledgers
@@ -369,15 +352,14 @@ impl<'a> CurrentState<'a> {
         env: &Env,
         config: &Config,
         token_contract_id_bytes: &[u8],
-        address_seed: u64,
-        address_types: &[AddressType; NUMBER_OF_ADDRESSES],
+        address_generator: &AddressGenerator,
     ) -> Self {
         let token_contract_id =
             Address::from_string_bytes(&Bytes::from_slice(env, &token_contract_id_bytes));
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
-        let address_pairs = generate_addresses_from_seed(env, address_seed, address_types);
+        let address_pairs = address_generator.generate_addresses(env);
 
         let accounts: RustVec<Address> =
             address_pairs.iter().map(|(addr, _)| addr.clone()).collect();
@@ -551,132 +533,4 @@ fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
         }
         _ => {}
     }
-}
-
-fn generate_addresses_from_seed(
-    env: &Env,
-    address_seed: u64,
-    address_types: &[AddressType; NUMBER_OF_ADDRESSES],
-) -> RustVec<(Address, [u8; 32])> {
-    let mut addresses = RustVec::<(Address, [u8; 32])>::new();
-
-    for i in 0..NUMBER_OF_ADDRESSES {
-        let seed = address_seed
-            .checked_add(i as u64)
-            .expect("Overflow")
-            .to_be_bytes();
-        let seed: [u8; 32] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, seed[0],
-            seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
-        ];
-
-        let address = match address_types[i] {
-            AddressType::Account => {
-                let signing_key = SigningKey::from_bytes(&seed);
-                let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-                    signing_key.verifying_key().to_bytes(),
-                )));
-
-                let sc_address = ScAddress::Account(account_id);
-                let address = Address::try_from_val(env, &sc_address).unwrap();
-                address
-            }
-            AddressType::Contract => {
-                Address::try_from_val(env, &ScAddress::Contract(Hash(seed))).unwrap()
-            }
-        };
-
-        addresses.push((address, seed));
-    }
-
-    addresses
-}
-
-fn create_default_account(env: &Env, account_id: &AccountId, signers: Vec<(&SigningKey, u32)>) {
-    let key = LedgerKey::Account(LedgerKeyAccount {
-        account_id: account_id.clone(),
-    });
-    let mut acc_signers = vec![];
-    for (signer, weight) in signers {
-        acc_signers.push(Signer {
-            key: SignerKey::Ed25519(Uint256(signer.verifying_key().to_bytes())),
-            weight,
-        });
-    }
-
-    let ext = AccountEntryExt::V0;
-    let acc_entry = AccountEntry {
-        account_id: account_id.clone(),
-        balance: 10_000_000,
-        seq_num: SequenceNumber(0),
-        num_sub_entries: 0,
-        inflation_dest: None,
-        flags: 0,
-        home_domain: Default::default(),
-        thresholds: Thresholds([1, 0, 0, 0]),
-        signers: acc_signers.try_into().unwrap(),
-        ext,
-    };
-
-    env.host()
-        .with_mut_storage(|storage| {
-            storage.put(
-                &Rc::new(key),
-                &Rc::new(LedgerEntry {
-                    last_modified_ledger_seq: 0,
-                    data: LedgerEntryData::Account(acc_entry),
-                    ext: LedgerEntryExt::V0,
-                }),
-                None,
-                soroban_env_host::budget::AsBudget::as_budget(env.host()),
-            )
-        })
-        .expect("ok");
-}
-
-fn create_default_trustline(env: &Env, account_id: &AccountId) {
-    let seed: [u8; 32] = [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 1,
-    ];
-
-    let issuer = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(seed)));
-    let asset = TrustLineAsset::CreditAlphanum4(AlphaNum4 {
-        asset_code: AssetCode4([b'a', b'a', b'a', 0]),
-        issuer: issuer,
-    });
-
-    let key = LedgerKey::Trustline(LedgerKeyTrustLine {
-        account_id: account_id.clone(),
-        asset: asset.clone(),
-    });
-
-    let flags =
-        TrustLineFlags::AuthorizedFlag as u32 | TrustLineFlags::TrustlineClawbackEnabledFlag as u32;
-
-    let ext = TrustLineEntryExt::V0;
-
-    let trustline_entry = TrustLineEntry {
-        account_id: account_id.clone(),
-        asset,
-        balance: 0,
-        limit: i64::MAX,
-        flags,
-        ext,
-    };
-
-    env.host()
-        .with_mut_storage(|storage| {
-            storage.put(
-                &Rc::new(key),
-                &Rc::new(LedgerEntry {
-                    last_modified_ledger_seq: 0,
-                    data: LedgerEntryData::Trustline(trustline_entry),
-                    ext: LedgerEntryExt::V0,
-                }),
-                None,
-                soroban_env_host::budget::AsBudget::as_budget(env.host()),
-            )
-        })
-        .expect("ok");
 }

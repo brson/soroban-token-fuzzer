@@ -1,6 +1,7 @@
 pub mod config;
 pub mod fuzz;
 pub mod input;
+pub mod addrgen;
 
 pub use config::{Config, ContractTokenOps, TokenAdminClient};
 pub use fuzz::fuzz_token;
