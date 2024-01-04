@@ -6,9 +6,11 @@ use crate::DAY_IN_LEDGERS;
 use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
-use soroban_sdk::testutils::{Address as _, Events, Ledger};
+use soroban_sdk::testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
-use soroban_sdk::{token::Client, Address, Bytes, Env, Error, InvokeError, TryFromVal, Val};
+use soroban_sdk::{
+    token::Client, Address, Bytes, Env, Error, IntoVal, InvokeError, TryFromVal, Val,
+};
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
 
@@ -63,12 +65,17 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     for transaction in input.transactions {
         // The Env will be different for each tx, so we need to reconstruct
         // everything that depends on it.
-        env.mock_all_auths();
         env.budget().reset_unlimited();
 
         for command in transaction.commands {
             // println!("------- command: {:#?}", command);
-            exec_command(&command, &env, &mut contract_state, &current_state);
+            exec_command(
+                &command,
+                &env,
+                &token_contract_id_bytes,
+                &mut contract_state,
+                &current_state,
+            );
         }
 
         // Advance time and begin new transaction
@@ -115,6 +122,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 fn exec_command(
     command: &Command,
     env: &Env,
+    token_contract_id_bytes: &[u8],
     contract_state: &mut ContractState,
     current_state: &CurrentState,
 ) {
@@ -134,6 +142,7 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+                println!("mint _r: {:?}", _r);
 
                 contract_state.add_balance(&accounts[input.to_account_index], input.amount);
 
@@ -142,6 +151,21 @@ fn exec_command(
             }
         }
         Command::Approve(input) => {
+            mock_auths_for_command(
+                env,
+                "approve",
+                &input.auths,
+                current_state,
+                token_contract_id_bytes,
+                (
+                    &accounts[input.from_account_index],
+                    &accounts[input.spender_account_index],
+                    input.amount,
+                    input.expiration_ledger,
+                )
+                    .into_val(env),
+            );
+
             let r = token_client.try_approve(
                 &accounts[input.from_account_index],
                 &accounts[input.spender_account_index],
@@ -157,6 +181,7 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+                println!("approve _r: {:?}", _r);
 
                 contract_state.set_allowance(
                     &accounts[input.from_account_index],
@@ -166,6 +191,21 @@ fn exec_command(
             }
         }
         Command::TransferFrom(input) => {
+            mock_auths_for_command(
+                env,
+                "transfer_from",
+                &input.auths,
+                current_state,
+                token_contract_id_bytes,
+                (
+                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index],
+                    &accounts[input.to_account_index],
+                    input.amount,
+                )
+                    .into_val(env),
+            );
+
             let r = token_client.try_transfer_from(
                 &accounts[input.spender_account_index],
                 &accounts[input.from_account_index],
@@ -181,6 +221,7 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+                println!("transfer_from _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
                 contract_state.add_balance(&accounts[input.to_account_index], input.amount);
@@ -193,6 +234,20 @@ fn exec_command(
             }
         }
         Command::Transfer(input) => {
+            mock_auths_for_command(
+                env,
+                "transfer",
+                &input.auths,
+                current_state,
+                token_contract_id_bytes,
+                (
+                    &accounts[input.from_account_index],
+                    &accounts[input.to_account_index],
+                    input.amount,
+                )
+                    .into_val(env),
+            );
+
             let r = token_client.try_transfer(
                 &accounts[input.from_account_index],
                 &accounts[input.to_account_index],
@@ -207,12 +262,27 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+                println!("transfer _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
                 contract_state.add_balance(&accounts[input.to_account_index], input.amount);
             }
         }
         Command::BurnFrom(input) => {
+            mock_auths_for_command(
+                env,
+                "burn_from",
+                &input.auths,
+                current_state,
+                token_contract_id_bytes,
+                (
+                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index],
+                    input.amount,
+                )
+                    .into_val(env),
+            );
+
             let r = token_client.try_burn_from(
                 &accounts[input.spender_account_index],
                 &accounts[input.from_account_index],
@@ -227,6 +297,7 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+                println!("burn from _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
 
@@ -241,6 +312,15 @@ fn exec_command(
             }
         }
         Command::Burn(input) => {
+            mock_auths_for_command(
+                env,
+                "burn",
+                &input.auths,
+                current_state,
+                token_contract_id_bytes,
+                (&accounts[input.from_account_index], input.amount).into_val(env),
+            );
+
             let r = token_client.try_burn(&accounts[input.from_account_index], &input.amount);
 
             if input.amount < 0 {
@@ -251,6 +331,7 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+                println!("burn _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
 
@@ -521,4 +602,36 @@ fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
         }
         _ => {}
     }
+}
+
+fn mock_auths_for_command(
+    env: &Env,
+    fn_name: &str,
+    auths: &[bool],
+    current_state: &CurrentState,
+    token_contract_id_bytes: &[u8],
+    args: soroban_sdk::Vec<Val>,
+) {
+    let token_contract_id =
+        Address::from_string_bytes(&Bytes::from_slice(env, token_contract_id_bytes));
+    let accounts = &current_state.accounts;
+
+    let invoke = MockAuthInvoke {
+        contract: &token_contract_id,
+        fn_name,
+        args: args,
+        sub_invokes: &[],
+    };
+
+    let mut mock_auths = RustVec::new();
+    for i in 0..NUMBER_OF_ADDRESSES {
+        if auths[i] {
+            mock_auths.push(MockAuth {
+                address: &accounts[i],
+                invoke: &invoke,
+            });
+        }
+    }
+    env.mock_auths(&mock_auths);
+//    env.mock_all_auths();
 }

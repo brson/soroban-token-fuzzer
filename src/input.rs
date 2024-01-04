@@ -50,6 +50,7 @@ pub struct ApproveInput {
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub spender_account_index: usize,
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -62,6 +63,7 @@ pub struct TransferFromInput {
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub to_account_index: usize,
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -72,6 +74,7 @@ pub struct TransferInput {
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub to_account_index: usize,
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -82,6 +85,7 @@ pub struct BurnFromInput {
     pub spender_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -90,4 +94,5 @@ pub struct BurnInput {
     pub amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
