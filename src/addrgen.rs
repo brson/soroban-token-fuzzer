@@ -25,16 +25,21 @@ pub enum AddressType {
     Contract,
 }
 
+pub struct TestSigner {
+    address: Address,
+    key: Option<SignerKey>,
+}
+
 impl AddressGenerator {
-    pub fn generate_addresses(&self, env: &Env) -> RustVec<Address> {
+    pub fn generate_signers(&self, env: &Env) -> RustVec<TestSigner> {
         self.generate_addresses_with_bytes(env)
             .into_iter()
             .map(|(a, _)| a)
             .collect()
     }
 
-    fn generate_addresses_with_bytes(&self, env: &Env) -> RustVec<(Address, [u8; 32])> {
-        let mut addresses = RustVec::<(Address, [u8; 32])>::new();
+    fn generate_signers_with_bytes(&self, env: &Env) -> RustVec<(TestSigner, [u8; 32])> {
+        let mut signers = RustVec::<Signer>::new();
 
         for i in 0..NUMBER_OF_ADDRESSES {
             let seed = self
@@ -42,37 +47,47 @@ impl AddressGenerator {
                 .checked_add(i as u64)
                 .expect("Overflow")
                 .to_be_bytes();
-            let address_bytes: [u8; 32] = [
+            let signer_bytes: [u8; 32] = [
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, seed[0],
                 seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
             ];
 
-            let address = match self.address_types[i] {
+            let test_signer = match self.address_types[i] {
                 AddressType::Account => {
-                    let signing_key = SigningKey::from_bytes(&address_bytes);
-                    let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-                        signing_key.verifying_key().to_bytes(),
-                    )));
-
+                    let signing_key = SigningKey::from_bytes(&signer_bytes);
+                    let verifying_key = signing_key.verifying_key().to_bytes();
+                    
+                    let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(verifying_key)));
                     let sc_address = ScAddress::Account(account_id);
                     let address = Address::try_from_val(env, &sc_address).unwrap();
-                    address
+                    let test_signer = TestSigner {
+                        address,
+                        key: Some(SignerKey::Ed25519(Uint256(verifying_key))),
+                    };
+
+                    test_signer
                 }
                 AddressType::Contract => {
-                    Address::try_from_val(env, &ScAddress::Contract(Hash(address_bytes))).unwrap()
+                    let address = Address::try_from_val(env, &ScAddress::Contract(Hash(signer_bytes))).unwrap();
+                    let test_signer = Signer {
+                        address,
+                        None,
+                    };
+
+                    test_signer
                 }
             };
 
-            addresses.push((address, address_bytes));
+            signers.push((test_signer, signer_bytes));
         }
 
-        addresses
+        signers
     }
 
     pub fn setup_account_storage(&self, env: &Env) {
-        let address_pairs = self.generate_addresses_with_bytes(&env);
-        address_pairs.iter().for_each(|(addr, bytes)| {
-            let sc_addr = ScAddress::try_from(addr).unwrap();
+        let signers_n_bytes = self.generate_signers_with_bytes(&env);
+        signers_n_bytes.iter().for_each(|(signer, bytes)| {
+            let sc_addr = ScAddress::try_from(signer.address).unwrap();
             match sc_addr {
                 ScAddress::Account(account_id) => {
                     let signing_key = SigningKey::from_bytes(bytes);

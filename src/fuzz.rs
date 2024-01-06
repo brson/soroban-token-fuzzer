@@ -1,4 +1,4 @@
-use crate::addrgen::AddressGenerator;
+use crate::addrgen::{AddressGenerator, TestSigner};
 use crate::config::*;
 use crate::input::*;
 use crate::util::*;
@@ -6,10 +6,21 @@ use crate::DAY_IN_LEDGERS;
 use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
-use soroban_sdk::testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke};
+use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
 use soroban_sdk::{
     token::Client, Address, Bytes, Env, Error, IntoVal, InvokeError, TryFromVal, Val,
+};
+use soroban_sdk::xdr::{
+    ScVal,
+    SorobanAuthorizationEntry,
+    HashIdPreimageSorobanAuthorization,
+    HashIdPreimage,
+    SorobanCredentials,
+    ScSymbol,
+    InvokeContractArgs,
+    SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation,
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
@@ -37,8 +48,8 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     {
         input.address_generator.setup_account_storage(&env);
 
-        let addresses = input.address_generator.generate_addresses(&env);
-        let admin = &addresses[0];
+        let signers = input.address_generator.generate_signers(&env);
+        let admin = &signers[0].address;
 
         let token_contract_id = config.register_contract_init(&env, admin);
         token_contract_id_bytes = address_to_bytes(&token_contract_id);
@@ -428,7 +439,7 @@ impl ContractState {
 /// State that dependso on the `Env` and is reconstructed
 /// every transaction.
 struct CurrentState<'a> {
-    accounts: Vec<Address>,
+    accounts: Vec<TestSigner>,
     admin_client: Box<dyn TokenAdminClient<'a> + 'a>,
     token_client: Client<'a>,
 }
@@ -445,7 +456,7 @@ impl<'a> CurrentState<'a> {
         let admin_client = config.new_admin_client(env, &token_contract_id);
         let token_client = Client::new(env, &token_contract_id);
 
-        let accounts = address_generator.generate_addresses(env);
+        let accounts = address_generator.generate_signers(env);
 
         CurrentState {
             accounts,
@@ -462,9 +473,9 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
     assert!(contract.symbol.eq(&string_to_bytes(token_client.symbol())));
     assert_eq!(contract.decimals, token_client.decimals());
 
-    for addr in &current.accounts {
-        assert_eq!(contract.get_balance(addr), token_client.balance(addr));
-        assert!(token_client.balance(addr) >= 0)
+    for signer in &current.accounts {
+        assert_eq!(contract.get_balance(signer.address), token_client.balance(signer.address));
+        assert!(token_client.balance(signer.address) >= 0)
     }
 
     let pairs = current
@@ -472,10 +483,10 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
         .iter()
         .cartesian_product(current.accounts.iter());
 
-    for (addr1, addr2) in pairs {
+    for (signer1, signer2) in pairs {
         assert_eq!(
-            contract.get_allowance(addr1, addr2),
-            token_client.allowance(addr1, addr2),
+            contract.get_allowance(signer1.address, signer2.address),
+            token_client.allowance(signer1.address, signer2.address),
         );
     }
 
@@ -483,7 +494,7 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
     let sum_of_balances_1 = current
         .accounts
         .iter()
-        .map(|a| BigInt::from(token_client.balance(&a)))
+        .map(|a| BigInt::from(token_client.balance(&a.address)))
         .sum();
 
     assert_eq!(sum_of_balances_0, sum_of_balances_1);
@@ -634,4 +645,62 @@ fn mock_auths_for_command(
     }
     env.mock_auths(&mock_auths);
 //    env.mock_all_auths();
+}
+
+pub(crate) fn authorize_single_invocation(
+    env: &Env,
+    fn_name: &str,
+    auths: &[bool],
+    current_state: &CurrentState,
+    token_contract_id_bytes: &[u8],
+    args: soroban_sdk::Vec<Val>,
+) {
+    
+    let sc_address = ScAddress::try_from(signer.address).unwrap();
+    let mut credentials = match signer {
+        TestSigner::AccountInvoker(_) => SorobanCredentials::SourceAccount,
+        TestSigner::Account(_) | TestSigner::AccountContract(_) => {
+            SorobanCredentials::Address(SorobanAddressCredentials {
+                address: sc_address,
+                nonce: nonce.unwrap().0,
+                signature_expiration_ledger: nonce.unwrap().1,
+                signature: ScVal::Void,
+            })
+        }
+        TestSigner::ContractInvoker(_) => {
+            // Nothing need to be authorized for contract invoker here.
+            return;
+        }
+    };
+
+    let root_invocation = SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+            contract_address: contract_address.to_sc_address().unwrap(),
+            function_name: ScSymbol(function_name.try_into().unwrap()),
+            args: host.vecobject_to_scval_vec(args.into()).unwrap(),
+        }),
+        sub_invocations: Default::default(),
+    };
+
+    if let SorobanCredentials::Address(address_credentials) = &mut credentials {
+        let signature_payload_preimage =
+            HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                network_id: host
+                    .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                invocation: root_invocation.clone(),
+                nonce: address_credentials.nonce,
+                signature_expiration_ledger: address_credentials.signature_expiration_ledger,
+            });
+        let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
+        address_credentials.signature = signer.sign(host, &signature_payload);
+    }
+    let auth_entry = SorobanAuthorizationEntry {
+        credentials,
+        root_invocation,
+    };
+
+    host.set_authorization_entries(vec![auth_entry]).unwrap();
 }
