@@ -9,9 +9,10 @@ use num_bigint::BigInt;
 use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
 use soroban_sdk::{
-    token::Client, Address, Bytes, Env, Error, IntoVal, InvokeError, TryFromVal, Val,
+    token::Client, Address, Bytes, Env, Error, IntoVal, InvokeError, TryFromVal, Val, BytesN,
 };
 use soroban_sdk::xdr::{
+    ScAddress,
     ScVal,
     SorobanAuthorizationEntry,
     HashIdPreimageSorobanAuthorization,
@@ -21,9 +22,11 @@ use soroban_sdk::xdr::{
     InvokeContractArgs,
     SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation,
+    SorobanAddressCredentials,
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
+use ed25519_dalek::SigningKey;
 
 // Don't know where this number comes from.
 const MAX_LEDGERS_TO_ADVANCE: u32 = 4095;
@@ -113,12 +116,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                     .accounts
                     .iter()
                     .cartesian_product(current_state.accounts.iter());
-                for (addr1, addr2) in pairs {
-                    let expected_allowance = contract_state.get_allowance(addr1, addr2);
-                    let actual_allowance = current_state.token_client.allowance(addr1, addr2);
+                for (signer1, signer2) in pairs {
+                    let expected_allowance = contract_state.get_allowance(&signer1.address, &signer2.address);
+                    let actual_allowance = current_state.token_client.allowance(&signer1.address, &signer2.address);
                     if actual_allowance == 0 && expected_allowance != 0 {
                         // Assume the allowance expired.
-                        contract_state.set_allowance(addr1, addr2, actual_allowance);
+                        contract_state.set_allowance(&signer1.address, &signer2.address, actual_allowance);
                     }
                 }
             }
@@ -143,7 +146,7 @@ fn exec_command(
 
     match command {
         Command::Mint(input) => {
-            let r = admin_client.try_mint(&accounts[input.to_account_index], &input.amount);
+            let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount);
 
             if input.amount < 0 {
                 assert!(r.is_err());
@@ -155,7 +158,7 @@ fn exec_command(
                 let _r = r.expect("ok");
                 println!("mint _r: {:?}", _r);
 
-                contract_state.add_balance(&accounts[input.to_account_index], input.amount);
+                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
 
                 contract_state.sum_of_mints =
                     contract_state.sum_of_mints.clone() + BigInt::from(input.amount);
@@ -169,8 +172,8 @@ fn exec_command(
                 current_state,
                 token_contract_id_bytes,
                 (
-                    &accounts[input.from_account_index],
-                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index].address,
+                    &accounts[input.spender_account_index].address,
                     input.amount,
                     input.expiration_ledger,
                 )
@@ -178,8 +181,8 @@ fn exec_command(
             );
 
             let r = token_client.try_approve(
-                &accounts[input.from_account_index],
-                &accounts[input.spender_account_index],
+                &accounts[input.from_account_index].address,
+                &accounts[input.spender_account_index].address,
                 &input.amount,
                 &input.expiration_ledger,
             );
@@ -195,8 +198,8 @@ fn exec_command(
                 println!("approve _r: {:?}", _r);
 
                 contract_state.set_allowance(
-                    &accounts[input.from_account_index],
-                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index].address,
+                    &accounts[input.spender_account_index].address,
                     input.amount,
                 );
             }
@@ -209,18 +212,18 @@ fn exec_command(
                 current_state,
                 token_contract_id_bytes,
                 (
-                    &accounts[input.spender_account_index],
-                    &accounts[input.from_account_index],
-                    &accounts[input.to_account_index],
+                    &accounts[input.spender_account_index].address,
+                    &accounts[input.from_account_index].address,
+                    &accounts[input.to_account_index].address,
                     input.amount,
                 )
                     .into_val(env),
             );
 
             let r = token_client.try_transfer_from(
-                &accounts[input.spender_account_index],
-                &accounts[input.from_account_index],
-                &accounts[input.to_account_index],
+                &accounts[input.spender_account_index].address,
+                &accounts[input.from_account_index].address,
+                &accounts[input.to_account_index].address,
                 &input.amount,
             );
 
@@ -234,12 +237,12 @@ fn exec_command(
                 let _r = r.expect("ok");
                 println!("transfer_from _r: {:?}", _r);
 
-                contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
-                contract_state.add_balance(&accounts[input.to_account_index], input.amount);
+                contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
+                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
 
                 contract_state.sub_allowance(
-                    &accounts[input.from_account_index],
-                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index].address,
+                    &accounts[input.spender_account_index].address,
                     input.amount,
                 );
             }
@@ -252,16 +255,16 @@ fn exec_command(
                 current_state,
                 token_contract_id_bytes,
                 (
-                    &accounts[input.from_account_index],
-                    &accounts[input.to_account_index],
+                    &accounts[input.from_account_index].address,
+                    &accounts[input.to_account_index].address,
                     input.amount,
                 )
                     .into_val(env),
             );
 
             let r = token_client.try_transfer(
-                &accounts[input.from_account_index],
-                &accounts[input.to_account_index],
+                &accounts[input.from_account_index].address,
+                &accounts[input.to_account_index].address,
                 &input.amount,
             );
 
@@ -275,8 +278,8 @@ fn exec_command(
                 let _r = r.expect("ok");
                 println!("transfer _r: {:?}", _r);
 
-                contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
-                contract_state.add_balance(&accounts[input.to_account_index], input.amount);
+                contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
+                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
             }
         }
         Command::BurnFrom(input) => {
@@ -287,16 +290,16 @@ fn exec_command(
                 current_state,
                 token_contract_id_bytes,
                 (
-                    &accounts[input.spender_account_index],
-                    &accounts[input.from_account_index],
+                    &accounts[input.spender_account_index].address,
+                    &accounts[input.from_account_index].address,
                     input.amount,
                 )
                     .into_val(env),
             );
 
             let r = token_client.try_burn_from(
-                &accounts[input.spender_account_index],
-                &accounts[input.from_account_index],
+                &accounts[input.spender_account_index].address,
+                &accounts[input.from_account_index].address,
                 &input.amount,
             );
 
@@ -310,11 +313,11 @@ fn exec_command(
                 let _r = r.expect("ok");
                 println!("burn from _r: {:?}", _r);
 
-                contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
+                contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
 
                 contract_state.sub_allowance(
-                    &accounts[input.from_account_index],
-                    &accounts[input.spender_account_index],
+                    &accounts[input.from_account_index].address,
+                    &accounts[input.spender_account_index].address,
                     input.amount,
                 );
 
@@ -329,10 +332,10 @@ fn exec_command(
                 &input.auths,
                 current_state,
                 token_contract_id_bytes,
-                (&accounts[input.from_account_index], input.amount).into_val(env),
+                (&accounts[input.from_account_index].address, input.amount).into_val(env),
             );
 
-            let r = token_client.try_burn(&accounts[input.from_account_index], &input.amount);
+            let r = token_client.try_burn(&accounts[input.from_account_index].address, &input.amount);
 
             if input.amount < 0 {
                 assert!(r.is_err());
@@ -344,7 +347,7 @@ fn exec_command(
                 let _r = r.expect("ok");
                 println!("burn _r: {:?}", _r);
 
-                contract_state.sub_balance(&accounts[input.from_account_index], input.amount);
+                contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
 
                 contract_state.sum_of_burns =
                     contract_state.sum_of_burns.clone() + &BigInt::from(input.amount);
@@ -474,8 +477,8 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
     assert_eq!(contract.decimals, token_client.decimals());
 
     for signer in &current.accounts {
-        assert_eq!(contract.get_balance(signer.address), token_client.balance(signer.address));
-        assert!(token_client.balance(signer.address) >= 0)
+        assert_eq!(contract.get_balance(&signer.address), token_client.balance(&signer.address));
+        assert!(token_client.balance(&signer.address) >= 0)
     }
 
     let pairs = current
@@ -485,8 +488,8 @@ fn assert_state(contract: &ContractState, current: &CurrentState) {
 
     for (signer1, signer2) in pairs {
         assert_eq!(
-            contract.get_allowance(signer1.address, signer2.address),
-            token_client.allowance(signer1.address, signer2.address),
+            contract.get_allowance(&signer1.address, &signer2.address),
+            token_client.allowance(&signer1.address, &signer2.address),
         );
     }
 
@@ -638,7 +641,7 @@ fn mock_auths_for_command(
     for i in 0..NUMBER_OF_ADDRESSES {
         if auths[i] {
             mock_auths.push(MockAuth {
-                address: &accounts[i],
+                address: &accounts[i].address,
                 invoke: &invoke,
             });
         }
@@ -647,7 +650,7 @@ fn mock_auths_for_command(
 //    env.mock_all_auths();
 }
 
-pub(crate) fn authorize_single_invocation(
+pub fn authorize_single_invocation(
     env: &Env,
     fn_name: &str,
     auths: &[bool],
@@ -655,52 +658,97 @@ pub(crate) fn authorize_single_invocation(
     token_contract_id_bytes: &[u8],
     args: soroban_sdk::Vec<Val>,
 ) {
+    let token_contract_id =
+        Address::from_string_bytes(&Bytes::from_slice(env, token_contract_id_bytes));
+    let token_contract_sc_address = ScAddress::try_from(token_contract_id).unwrap();
+
+    let mut auth_entries = soroban_sdk::Vec::<SorobanAuthorizationEntry>::new(env);
     
-    let sc_address = ScAddress::try_from(signer.address).unwrap();
-    let mut credentials = match signer {
-        TestSigner::AccountInvoker(_) => SorobanCredentials::SourceAccount,
-        TestSigner::Account(_) | TestSigner::AccountContract(_) => {
-            SorobanCredentials::Address(SorobanAddressCredentials {
-                address: sc_address,
-                nonce: nonce.unwrap().0,
-                signature_expiration_ledger: nonce.unwrap().1,
-                signature: ScVal::Void,
-            })
-        }
-        TestSigner::ContractInvoker(_) => {
-            // Nothing need to be authorized for contract invoker here.
-            return;
-        }
-    };
+    for i in 0..NUMBER_OF_ADDRESSES {
+        if auths[i] {
+            let signer = current_state.accounts[i];
+            let sc_address = ScAddress::try_from(signer.address).unwrap();
 
-    let root_invocation = SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
-            contract_address: contract_address.to_sc_address().unwrap(),
-            function_name: ScSymbol(function_name.try_into().unwrap()),
-            args: host.vecobject_to_scval_vec(args.into()).unwrap(),
-        }),
-        sub_invocations: Default::default(),
-    };
+            let mut credentials = match signer.key {
+                Some(key) => {
+                    SorobanCredentials::Address(SorobanAddressCredentials {
+                        address: sc_address,
+                        nonce: 1111, // todo
+                        signature_expiration_ledger: 0, // todo
+                        signature: ScVal::Void,
+                    })
+                }
+                None => { return; }
+            };
 
-    if let SorobanCredentials::Address(address_credentials) = &mut credentials {
-        let signature_payload_preimage =
-            HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
-                network_id: host
-                    .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
-                    .unwrap()
-                    .try_into()
-                    .unwrap(),
-                invocation: root_invocation.clone(),
-                nonce: address_credentials.nonce,
-                signature_expiration_ledger: address_credentials.signature_expiration_ledger,
-            });
-        let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
-        address_credentials.signature = signer.sign(host, &signature_payload);
+            let root_invocation = SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: token_contract_sc_address.clone(),
+                    function_name: ScSymbol(fn_name.try_into().unwrap()),
+                    args: args,
+                }),
+                sub_invocations: Default::default(),
+            };
+
+            /*
+            if let SorobanCredentials::Address(address_credentials) = &mut credentials {
+                let signature_payload_preimage =
+                    HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                        network_id: env
+                            .host()
+                            .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                        invocation: root_invocation.clone(),
+                        nonce: address_credentials.nonce,
+                        signature_expiration_ledger: address_credentials.signature_expiration_ledger,
+                    });
+
+                use soroban_sdk::xdr::WriteXdr;
+                let mut buf = vec![];
+                signature_payload_preimage.write_xdr(&mut buf).unwrap();                
+                let signature_payload = Sha256::digest(&buf).try_into().unwrap();
+
+
+                let signature = &sign_payload_for_account(env, signer.key, signature_payload);
+                address_credentials.signature = signature.into();
+            }
+            */
+            
+            let auth_entry = SorobanAuthorizationEntry {
+                credentials,
+                root_invocation,
+            };
+            auth_entries.push(auth_entry);
+        }
     }
-    let auth_entry = SorobanAuthorizationEntry {
-        credentials,
-        root_invocation,
-    };
 
-    host.set_authorization_entries(vec![auth_entry]).unwrap();
+    env.set_auths(auth_entries);
 }
+
+/*
+// use super::account_contract::AccountEd25519Signature;
+fn sign_payload_for_account(
+    env: &Env,
+    signer: &SigningKey,
+    payload: &[u8],
+) -> AccountEd25519Signature {
+    AccountEd25519Signature {
+        public_key: BytesN::<32>::try_from_val(
+            host,
+            &host
+                .bytes_new_from_slice(&signer.verifying_key().to_bytes())
+                .unwrap(),
+        )
+        .unwrap(),
+        signature: BytesN::<64>::try_from_val(
+            host,
+            &host
+                .bytes_new_from_slice(&signer.sign(payload).to_bytes())
+                .unwrap(),
+        )
+        .unwrap(),
+    }
+}
+*/

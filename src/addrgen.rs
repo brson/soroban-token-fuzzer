@@ -26,20 +26,20 @@ pub enum AddressType {
 }
 
 pub struct TestSigner {
-    address: Address,
-    key: Option<SignerKey>,
+    pub address: Address,
+    pub key: Option<SignerKey>,
 }
 
 impl AddressGenerator {
     pub fn generate_signers(&self, env: &Env) -> RustVec<TestSigner> {
-        self.generate_addresses_with_bytes(env)
+        self.generate_signers_with_bytes(env)
             .into_iter()
             .map(|(a, _)| a)
             .collect()
     }
 
     fn generate_signers_with_bytes(&self, env: &Env) -> RustVec<(TestSigner, [u8; 32])> {
-        let mut signers = RustVec::<Signer>::new();
+        let mut signers = RustVec::<(TestSigner, [u8; 32])>::new();
 
         for i in 0..NUMBER_OF_ADDRESSES {
             let seed = self
@@ -69,9 +69,9 @@ impl AddressGenerator {
                 }
                 AddressType::Contract => {
                     let address = Address::try_from_val(env, &ScAddress::Contract(Hash(signer_bytes))).unwrap();
-                    let test_signer = Signer {
+                    let test_signer = TestSigner {
                         address,
-                        None,
+                        key: None,
                     };
 
                     test_signer
