@@ -6,12 +6,14 @@ use crate::DAY_IN_LEDGERS;
 use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
-use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
+use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo};
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
 use soroban_sdk::{
     token::Client, Address, Bytes, Env, Error, IntoVal, InvokeError, TryFromVal, Val, BytesN,
+    contract, contractimpl, contracttype,
 };
 use soroban_sdk::xdr::{
+    VecM,
     ScAddress,
     ScVal,
     SorobanAuthorizationEntry,
@@ -26,7 +28,9 @@ use soroban_sdk::xdr::{
 };
 use std::collections::BTreeMap;
 use std::vec::Vec as RustVec;
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{SigningKey, Signer};
+use soroban_sdk::xdr::{WriteXdr, Limited, Limits};
+use sha2::{Sha256, Digest};
 
 // Don't know where this number comes from.
 const MAX_LEDGERS_TO_ADVANCE: u32 = 4095;
@@ -65,6 +69,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         &token_contract_id_bytes,
         &input.address_generator,
     );
+    let mut signature_nonce = 0;
 
     // Save some values that should never change
     // fixme put this in the ContractState ctor
@@ -89,6 +94,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 &token_contract_id_bytes,
                 &mut contract_state,
                 &current_state,
+                &mut signature_nonce,
             );
         }
 
@@ -139,6 +145,7 @@ fn exec_command(
     token_contract_id_bytes: &[u8],
     contract_state: &mut ContractState,
     current_state: &CurrentState,
+    signature_nonce: &mut i64,
 ) {
     let admin_client = &current_state.admin_client;
     let token_client = &current_state.token_client;
@@ -146,7 +153,24 @@ fn exec_command(
 
     match command {
         Command::Mint(input) => {
-            let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount);
+            mock_auths_for_command(
+                env,
+                "mint",
+                &input.auths,
+                current_state,
+                token_contract_id_bytes,
+                signature_nonce,
+                (
+                    &accounts[input.to_account_index].address,
+                    input.amount,
+                )
+                    .into_val(env),
+            );
+
+            let r = admin_client.try_mint(
+                &accounts[input.to_account_index].address,
+                &input.amount,
+            );
 
             if input.amount < 0 {
                 assert!(r.is_err());
@@ -171,6 +195,7 @@ fn exec_command(
                 &input.auths,
                 current_state,
                 token_contract_id_bytes,
+                signature_nonce,
                 (
                     &accounts[input.from_account_index].address,
                     &accounts[input.spender_account_index].address,
@@ -211,6 +236,7 @@ fn exec_command(
                 &input.auths,
                 current_state,
                 token_contract_id_bytes,
+                signature_nonce,
                 (
                     &accounts[input.spender_account_index].address,
                     &accounts[input.from_account_index].address,
@@ -254,6 +280,7 @@ fn exec_command(
                 &input.auths,
                 current_state,
                 token_contract_id_bytes,
+                signature_nonce,
                 (
                     &accounts[input.from_account_index].address,
                     &accounts[input.to_account_index].address,
@@ -289,6 +316,7 @@ fn exec_command(
                 &input.auths,
                 current_state,
                 token_contract_id_bytes,
+                signature_nonce,
                 (
                     &accounts[input.spender_account_index].address,
                     &accounts[input.from_account_index].address,
@@ -332,6 +360,7 @@ fn exec_command(
                 &input.auths,
                 current_state,
                 token_contract_id_bytes,
+                signature_nonce,
                 (&accounts[input.from_account_index].address, input.amount).into_val(env),
             );
 
@@ -618,80 +647,66 @@ fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
     }
 }
 
+#[contract]
+pub struct MockAuthContract;
+
+#[contractimpl]
+impl MockAuthContract {
+    #[allow(non_snake_case)]
+    pub fn __check_auth(_signature_payload: Val, _signatures: Val, _auth_context: Val) {}
+}
+
 fn mock_auths_for_command(
     env: &Env,
     fn_name: &str,
     auths: &[bool],
     current_state: &CurrentState,
     token_contract_id_bytes: &[u8],
+    signature_nonce: &mut i64,
     args: soroban_sdk::Vec<Val>,
 ) {
-    let token_contract_id =
-        Address::from_string_bytes(&Bytes::from_slice(env, token_contract_id_bytes));
-    let accounts = &current_state.accounts;
+    let curr_ledger = env.ledger().sequence();
+    let max_entry_ttl = env.ledger().get().max_entry_ttl;
+    let expiration_ledger = curr_ledger + max_entry_ttl - 1;
 
-    let invoke = MockAuthInvoke {
-        contract: &token_contract_id,
-        fn_name,
-        args: args,
-        sub_invokes: &[],
-    };
-
-    let mut mock_auths = RustVec::new();
-    for i in 0..NUMBER_OF_ADDRESSES {
-        if auths[i] {
-            mock_auths.push(MockAuth {
-                address: &accounts[i].address,
-                invoke: &invoke,
-            });
-        }
-    }
-    env.mock_auths(&mock_auths);
-//    env.mock_all_auths();
-}
-
-pub fn authorize_single_invocation(
-    env: &Env,
-    fn_name: &str,
-    auths: &[bool],
-    current_state: &CurrentState,
-    token_contract_id_bytes: &[u8],
-    args: soroban_sdk::Vec<Val>,
-) {
     let token_contract_id =
         Address::from_string_bytes(&Bytes::from_slice(env, token_contract_id_bytes));
     let token_contract_sc_address = ScAddress::try_from(token_contract_id).unwrap();
 
-    let mut auth_entries = soroban_sdk::Vec::<SorobanAuthorizationEntry>::new(env);
+    let mut auth_entries = RustVec::new();
     
     for i in 0..NUMBER_OF_ADDRESSES {
         if auths[i] {
-            let signer = current_state.accounts[i];
-            let sc_address = ScAddress::try_from(signer.address).unwrap();
+            let signer = &current_state.accounts[i];
+            let sc_address = ScAddress::try_from(signer.address.clone()).unwrap();
 
-            let mut credentials = match signer.key {
-                Some(key) => {
-                    SorobanCredentials::Address(SorobanAddressCredentials {
-                        address: sc_address,
-                        nonce: 1111, // todo
-                        signature_expiration_ledger: 0, // todo
-                        signature: ScVal::Void,
-                    })
-                }
-                None => { return; }
+            let is_contract_address = signer.key.is_none();
+
+            // contract addresses need to have registered contracts to be authorizers,
+            // at least according to the sdk's mock_auths method
+            if is_contract_address {
+                env.register_contract(&signer.address, MockAuthContract);
+            }
+
+            let mut credentials = SorobanAddressCredentials {
+                address: sc_address,
+                nonce: *signature_nonce,
+                signature_expiration_ledger: expiration_ledger,
+                signature: ScVal::Void, // updated below for non-contract addresses
             };
+
+            *signature_nonce += 1;
 
             let root_invocation = SorobanAuthorizedInvocation {
                 function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: token_contract_sc_address.clone(),
                     function_name: ScSymbol(fn_name.try_into().unwrap()),
-                    args: args,
+                    args: VecM::try_from(args.clone()).unwrap(),
                 }),
                 sub_invocations: Default::default(),
             };
 
-            /*
-            if let SorobanCredentials::Address(address_credentials) = &mut credentials {
+            if let Some(key) = &signer.key {
                 let signature_payload_preimage =
                     HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                         network_id: env
@@ -701,34 +716,37 @@ pub fn authorize_single_invocation(
                             .try_into()
                             .unwrap(),
                         invocation: root_invocation.clone(),
-                        nonce: address_credentials.nonce,
-                        signature_expiration_ledger: address_credentials.signature_expiration_ledger,
+                        nonce: *signature_nonce,
+                        signature_expiration_ledger: expiration_ledger,
                     });
 
-                use soroban_sdk::xdr::WriteXdr;
                 let mut buf = vec![];
-                signature_payload_preimage.write_xdr(&mut buf).unwrap();                
-                let signature_payload = Sha256::digest(&buf).try_into().unwrap();
+                let mut unlimited_buf = Limited::new(&mut buf, Limits::none());
+                signature_payload_preimage.write_xdr(&mut unlimited_buf).unwrap();
+                let signature_payload: [u8; 32] = Sha256::digest(&buf).try_into().unwrap();
 
-
-                let signature = &sign_payload_for_account(env, signer.key, signature_payload);
-                address_credentials.signature = signature.into();
+                let signature = sign_payload_for_account(env, key, &signature_payload);
+                let signatures = soroban_sdk::vec![env, signature];
+                credentials.signature = signatures.try_into().unwrap();
             }
-            */
             
             let auth_entry = SorobanAuthorizationEntry {
-                credentials,
+                credentials: SorobanCredentials::Address(credentials),
                 root_invocation,
             };
             auth_entries.push(auth_entry);
         }
     }
 
-    env.set_auths(auth_entries);
+    env.set_auths(&auth_entries);
 }
 
-/*
-// use super::account_contract::AccountEd25519Signature;
+#[contracttype]
+pub(crate) struct AccountEd25519Signature {
+    pub(crate) public_key: BytesN<32>,
+    pub(crate) signature: BytesN<64>,
+}
+
 fn sign_payload_for_account(
     env: &Env,
     signer: &SigningKey,
@@ -736,19 +754,14 @@ fn sign_payload_for_account(
 ) -> AccountEd25519Signature {
     AccountEd25519Signature {
         public_key: BytesN::<32>::try_from_val(
-            host,
-            &host
-                .bytes_new_from_slice(&signer.verifying_key().to_bytes())
-                .unwrap(),
+            env,
+            &signer.verifying_key().to_bytes(),
         )
         .unwrap(),
         signature: BytesN::<64>::try_from_val(
-            host,
-            &host
-                .bytes_new_from_slice(&signer.sign(payload).to_bytes())
-                .unwrap(),
+            env,
+            &signer.sign(payload).to_bytes(),
         )
         .unwrap(),
     }
 }
-*/

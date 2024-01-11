@@ -38,6 +38,15 @@ pub struct MintInput {
     pub amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub to_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -50,6 +59,14 @@ pub struct ApproveInput {
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub spender_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
     pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
@@ -63,6 +80,14 @@ pub struct TransferFromInput {
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub to_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
     pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
@@ -74,6 +99,14 @@ pub struct TransferInput {
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub to_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
     pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
@@ -85,6 +118,14 @@ pub struct BurnFromInput {
     pub spender_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
     pub auths: [bool; NUMBER_OF_ADDRESSES],
 }
 
@@ -94,5 +135,13 @@ pub struct BurnInput {
     pub amount: i128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
     pub auths: [bool; NUMBER_OF_ADDRESSES],
 }

@@ -27,7 +27,7 @@ pub enum AddressType {
 
 pub struct TestSigner {
     pub address: Address,
-    pub key: Option<SignerKey>,
+    pub key: Option<SigningKey>,
 }
 
 impl AddressGenerator {
@@ -52,7 +52,8 @@ impl AddressGenerator {
                 seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
             ];
 
-            let test_signer = match self.address_types[i] {
+            //let test_signer = match self.address_types[i] {
+            let test_signer = match AddressType::Account {
                 AddressType::Account => {
                     let signing_key = SigningKey::from_bytes(&signer_bytes);
                     let verifying_key = signing_key.verifying_key().to_bytes();
@@ -62,7 +63,7 @@ impl AddressGenerator {
                     let address = Address::try_from_val(env, &sc_address).unwrap();
                     let test_signer = TestSigner {
                         address,
-                        key: Some(SignerKey::Ed25519(Uint256(verifying_key))),
+                        key: Some(signing_key),
                     };
 
                     test_signer
@@ -87,7 +88,7 @@ impl AddressGenerator {
     pub fn setup_account_storage(&self, env: &Env) {
         let signers_n_bytes = self.generate_signers_with_bytes(&env);
         signers_n_bytes.iter().for_each(|(signer, bytes)| {
-            let sc_addr = ScAddress::try_from(signer.address).unwrap();
+            let sc_addr = ScAddress::try_from(signer.address.clone()).unwrap();
             match sc_addr {
                 ScAddress::Account(account_id) => {
                     let signing_key = SigningKey::from_bytes(bytes);
