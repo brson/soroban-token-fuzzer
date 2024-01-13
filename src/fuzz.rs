@@ -173,11 +173,11 @@ fn exec_command(
                 &input.amount,
             );
 
+            verify_token_contract_result(&env, &r);
+
             if input.amount < 0 {
                 assert!(r.is_err());
             }
-
-            verify_token_contract_result(&env, &r);
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
@@ -212,11 +212,11 @@ fn exec_command(
                 &input.expiration_ledger,
             );
 
+            verify_token_contract_result(&env, &r);
+
             if input.amount < 0 {
                 assert!(r.is_err());
             }
-
-            verify_token_contract_result(&env, &r);
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
@@ -252,11 +252,11 @@ fn exec_command(
                 &input.amount,
             );
 
+            verify_token_contract_result(&env, &r);
+
             if input.amount < 0 {
                 assert!(r.is_err());
             }
-
-            verify_token_contract_result(&env, &r);
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
@@ -293,11 +293,11 @@ fn exec_command(
                 &input.amount,
             );
 
+            verify_token_contract_result(&env, &r);
+
             if input.amount < 0 {
                 assert!(r.is_err());
             }
-
-            verify_token_contract_result(&env, &r);
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
@@ -328,11 +328,11 @@ fn exec_command(
                 &input.amount,
             );
 
+            verify_token_contract_result(&env, &r);
+
             if input.amount < 0 {
                 assert!(r.is_err());
             }
-
-            verify_token_contract_result(&env, &r);
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
@@ -362,11 +362,11 @@ fn exec_command(
 
             let r = token_client.try_burn(&accounts[input.from_account_index].address, &input.amount);
 
+            verify_token_contract_result(&env, &r);
+
             if input.amount < 0 {
                 assert!(r.is_err());
             }
-
-            verify_token_contract_result(&env, &r);
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
