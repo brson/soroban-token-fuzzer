@@ -57,8 +57,9 @@ impl AddressGenerator {
                 AddressType::Account => {
                     let signing_key = SigningKey::from_bytes(&signer_bytes);
                     let verifying_key = signing_key.verifying_key().to_bytes();
-                    
-                    let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(verifying_key)));
+
+                    let account_id =
+                        AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(verifying_key)));
                     let sc_address = ScAddress::Account(account_id);
                     let address = Address::try_from_val(env, &sc_address).unwrap();
                     let test_signer = TestSigner {
@@ -69,11 +70,10 @@ impl AddressGenerator {
                     test_signer
                 }
                 AddressType::Contract => {
-                    let address = Address::try_from_val(env, &ScAddress::Contract(Hash(signer_bytes))).unwrap();
-                    let test_signer = TestSigner {
-                        address,
-                        key: None,
-                    };
+                    let address =
+                        Address::try_from_val(env, &ScAddress::Contract(Hash(signer_bytes)))
+                            .unwrap();
+                    let test_signer = TestSigner { address, key: None };
 
                     test_signer
                 }
