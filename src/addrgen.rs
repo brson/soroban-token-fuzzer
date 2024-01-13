@@ -41,6 +41,7 @@ impl AddressGenerator {
     fn generate_signers_with_bytes(&self, env: &Env) -> RustVec<(TestSigner, [u8; 32])> {
         let mut signers = RustVec::<(TestSigner, [u8; 32])>::new();
 
+        // fixme seed of 0 or 1 seems to generate bogus contract addresses
         for i in 0..NUMBER_OF_ADDRESSES {
             let seed = self
                 .address_seed
@@ -52,8 +53,7 @@ impl AddressGenerator {
                 seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
             ];
 
-            //let test_signer = match self.address_types[i] {
-            let test_signer = match AddressType::Account {
+            let test_signer = match self.address_types[i] {
                 AddressType::Account => {
                     let signing_key = SigningKey::from_bytes(&signer_bytes);
                     let verifying_key = signing_key.verifying_key().to_bytes();

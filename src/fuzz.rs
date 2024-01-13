@@ -39,6 +39,7 @@ type TokenContractResult =
     Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>>;
 
 pub fn fuzz_token(config: Config, input: Input) -> Corpus {
+
     if input.transactions.iter().all(|tx| tx.commands.is_empty()) {
         return Corpus::Reject;
     }
@@ -81,12 +82,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         contract_state.decimals = token_client.decimals();
     }
 
-    for transaction in input.transactions {
+    for transaction in &input.transactions {
         // The Env will be different for each tx, so we need to reconstruct
         // everything that depends on it.
         env.budget().reset_unlimited();
 
-        for command in transaction.commands {
+        for command in &transaction.commands {
             // println!("------- command: {:#?}", command);
             exec_command(
                 &command,
@@ -180,7 +181,6 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                println!("mint _r: {:?}", _r);
 
                 contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
 
@@ -220,7 +220,6 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                println!("approve _r: {:?}", _r);
 
                 contract_state.set_allowance(
                     &accounts[input.from_account_index].address,
@@ -261,7 +260,6 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                println!("transfer_from _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
                 contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
@@ -303,7 +301,6 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                println!("transfer _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
                 contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
@@ -339,7 +336,6 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                println!("burn from _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
 
@@ -374,7 +370,6 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                println!("burn _r: {:?}", _r);
 
                 contract_state.sub_balance(&accounts[input.from_account_index].address, input.amount);
 
@@ -636,14 +631,18 @@ fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
             if e.is_type(ScErrorType::WasmVm) && e.is_code(ScErrorCode::InvalidAction) {
                 let msg = "contract failed with InvalidAction - unexpected panic?";
                 eprintln!("{msg}");
-                eprintln!("recent events (10):");
-                for (i, event) in env.events().all().iter().rev().take(10).enumerate() {
-                    eprintln!("{i}: {event:?}");
-                }
+                print_diagnostics(env);
                 panic!("{msg}");
             }
         }
         _ => {}
+    }
+}
+
+fn print_diagnostics(env: &Env) {
+    eprintln!("recent events (10):");
+    for (i, event) in env.events().all().iter().rev().take(10).enumerate() {
+        eprintln!("{i}: {event:?}");
     }
 }
 
@@ -695,8 +694,6 @@ fn mock_auths_for_command(
                 signature: ScVal::Void, // updated below for non-contract addresses
             };
 
-            *signature_nonce += 1;
-
             let root_invocation = SorobanAuthorizedInvocation {
                 function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: token_contract_sc_address.clone(),
@@ -730,6 +727,8 @@ fn mock_auths_for_command(
                 credentials.signature = signatures.try_into().unwrap();
             }
             
+            *signature_nonce += 1;
+
             let auth_entry = SorobanAuthorizationEntry {
                 credentials: SorobanCredentials::Address(credentials),
                 root_invocation,
