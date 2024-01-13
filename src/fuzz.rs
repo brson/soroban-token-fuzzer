@@ -179,6 +179,10 @@ fn exec_command(
                 assert!(r.is_err());
             }
 
+            if input.auths[0] == false {
+                assert!(r.is_err());
+            }
+
             if let Ok(r) = r {
                 let _r = r.expect("ok");
 
@@ -215,6 +219,10 @@ fn exec_command(
             verify_token_contract_result(&env, &r);
 
             if input.amount < 0 {
+                assert!(r.is_err());
+            }
+
+            if input.auths[input.from_account_index] == false {
                 assert!(r.is_err());
             }
 
@@ -255,6 +263,10 @@ fn exec_command(
             verify_token_contract_result(&env, &r);
 
             if input.amount < 0 {
+                assert!(r.is_err());
+            }
+
+            if input.auths[input.spender_account_index] == false {
                 assert!(r.is_err());
             }
 
@@ -299,6 +311,10 @@ fn exec_command(
                 assert!(r.is_err());
             }
 
+            if input.auths[input.from_account_index] == false {
+                assert!(r.is_err());
+            }
+
             if let Ok(r) = r {
                 let _r = r.expect("ok");
 
@@ -334,6 +350,10 @@ fn exec_command(
                 assert!(r.is_err());
             }
 
+            if input.auths[input.spender_account_index] == false {
+                assert!(r.is_err());
+            }
+
             if let Ok(r) = r {
                 let _r = r.expect("ok");
 
@@ -365,6 +385,10 @@ fn exec_command(
             verify_token_contract_result(&env, &r);
 
             if input.amount < 0 {
+                assert!(r.is_err());
+            }
+
+            if input.auths[input.from_account_index] == false {
                 assert!(r.is_err());
             }
 
