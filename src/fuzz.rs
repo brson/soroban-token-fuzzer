@@ -178,7 +178,6 @@ fn exec_command(
                 let _r = r.expect("ok");
 
                 contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
-
                 contract_state.sum_of_mints =
                     contract_state.sum_of_mints.clone() + BigInt::from(input.amount);
             }
@@ -396,6 +395,44 @@ fn exec_command(
                 contract_state.sum_of_burns =
                     contract_state.sum_of_burns.clone() + &BigInt::from(input.amount);
             }
+        }
+        Command::ApproveAndTransferFrom(input) => {
+            exec_command(
+                &Command::Approve(input.to_approve_input()),
+                env,
+                token_contract_id_bytes,
+                contract_state,
+                current_state,
+                signature_nonce,
+            );
+
+            exec_command(
+                &Command::TransferFrom(input.to_transfer_from_input()),
+                env,
+                token_contract_id_bytes,
+                contract_state,
+                current_state,
+                signature_nonce,
+            );
+        }
+        Command::ApproveAndBurnFrom(input) => {
+            exec_command(
+                &Command::Approve(input.to_approve_input()),
+                env,
+                token_contract_id_bytes,
+                contract_state,
+                current_state,
+                signature_nonce,
+            );
+
+            exec_command(
+                &Command::BurnFrom(input.to_burn_from_input()),
+                env,
+                token_contract_id_bytes,
+                contract_state,
+                current_state,
+                signature_nonce,
+            );
         }
     }
 }

@@ -30,6 +30,8 @@ pub enum Command {
     Transfer(TransferInput),
     BurnFrom(BurnFromInput),
     Burn(BurnInput),
+    ApproveAndTransferFrom(ApproveAndTransferFromInput),
+    ApproveAndBurnFrom(ApproveAndBurnFromInput),
 }
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -144,4 +146,93 @@ pub struct BurnInput {
         ).unwrap())
     })]
     pub auths: [bool; NUMBER_OF_ADDRESSES],
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct ApproveAndTransferFromInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
+    pub amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
+    pub expiration_ledger: u32,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    pub from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    pub spender_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    pub to_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
+}
+
+#[derive(Clone, Debug, arbitrary::Arbitrary)]
+pub struct ApproveAndBurnFromInput {
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
+    pub amount: i128,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
+    pub expiration_ledger: u32,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    pub from_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    pub spender_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
+    pub to_account_index: usize,
+    #[arbitrary(with = |u: &mut Unstructured| {
+        // biased bool - only sometimes decline the auth
+        Ok(<[bool; NUMBER_OF_ADDRESSES]>::try_from(
+            std::iter::from_fn(|| Some(u.ratio(9, 10).unwrap_or(true)))
+                .take(NUMBER_OF_ADDRESSES)
+                .collect::<Vec<_>>()
+        ).unwrap())
+    })]
+    pub auths: [bool; NUMBER_OF_ADDRESSES],
+}
+
+impl ApproveAndTransferFromInput {
+    pub fn to_approve_input(&self) -> ApproveInput {
+        ApproveInput {
+            amount: self.amount,
+            expiration_ledger: self.expiration_ledger,
+            from_account_index: self.from_account_index,
+            spender_account_index: self.spender_account_index,
+            auths: self.auths,
+        }
+    }
+
+    pub fn to_transfer_from_input(&self) -> TransferFromInput {
+        TransferFromInput {
+            amount: self.amount,
+            spender_account_index: self.spender_account_index,
+            from_account_index: self.from_account_index,
+            to_account_index: self.to_account_index,
+            auths: self.auths,
+        }
+    }
+}
+
+impl ApproveAndBurnFromInput {
+    pub fn to_approve_input(&self) -> ApproveInput {
+        ApproveInput {
+            amount: self.amount,
+            expiration_ledger: self.expiration_ledger,
+            from_account_index: self.from_account_index,
+            spender_account_index: self.spender_account_index,
+            auths: self.auths,
+        }
+    }
+
+    pub fn to_burn_from_input(&self) -> BurnFromInput {
+        BurnFromInput {
+            amount: self.amount,
+            spender_account_index: self.spender_account_index,
+            from_account_index: self.from_account_index,
+            auths: self.auths,
+        }
+    }
 }
