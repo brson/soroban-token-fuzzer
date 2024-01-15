@@ -9,6 +9,7 @@ use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
 use sha2::{Digest, Sha256};
 use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo};
+use soroban_sdk::testutils::Snapshot;
 use soroban_sdk::xdr::{
     HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, ScAddress, ScSymbol,
     ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
@@ -641,10 +642,30 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
             .checked_add(ledger_time)
             .expect("end of time");
 
+        purge_expired_entries(&mut snapshot);
+        // todo purge events and auths?
+
         let env = Env::from_snapshot(snapshot);
 
         env
     }
+}
+
+fn purge_expired_entries(snapshot: &mut Snapshot) {
+    snapshot.ledger.ledger_entries.retain(|entry| {
+        let (_key, (_entry, expiration_ledger)) = entry;
+
+        if let Some(expiration_ledger) = expiration_ledger {
+            if *expiration_ledger < snapshot.ledger.sequence_number {
+                false
+            } else {
+                true
+            }
+        } else {
+            // what does it mean for storage to not have an expiration ledger?
+            true
+        }
+    });
 }
 
 fn verify_token_contract_result(env: &Env, r: &TokenContractResult) {
