@@ -30,6 +30,8 @@ pub enum Command {
     Transfer(TransferInput),
     BurnFrom(BurnFromInput),
     Burn(BurnInput),
+    // These two exist just to make it more likely the fuzzer
+    // will generate a successful transfer_from / burn_from call
     ApproveAndTransferFrom(ApproveAndTransferFromInput),
     ApproveAndBurnFrom(ApproveAndBurnFromInput),
 }
