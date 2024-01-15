@@ -8,7 +8,7 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-soroban-sdk.version = "20.0.0"
+soroban-sdk.version = "20.1.0"
 soroban-sdk.features = ["testutils"]
 libfuzzer-sys = "0.4"
 soroban-token-fuzzer.path = ".."
