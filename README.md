@@ -76,6 +76,7 @@ cargo +nightly fuzz run fuzz_my_token
 
 The fuzzer generates several addresses,
 one of which will be an admin.
+These addresses may be contract addresses or native account addresses.
 
 It uses token-specific code to initialize the contract.
 
@@ -83,6 +84,7 @@ It then executes some number of commands against the contract,
 either a method on the `TokenInterface` interface,
 a token-specific `mint` method, or a command to advance time
 and begin a new transaction.
+For each call it generates auths for a random subset of addresses.
 
 After every step the fuzzer makes general assertions about invariants,
 and specific assertions related to the executed command.
@@ -107,14 +109,13 @@ After every step various invariants are asserted:
 - Math does not overflow (detected as a panic).
 - For `approve`, `transfer`, `transfer_from`, `burn_from`, `burn`,
   if the input amount is negative, the call returns an error.
+- If the correct auths have not been provided the call fails.
 - The results of the `name`, `symbol` and `decimals`
   methods have not changed.
 
 
 ## What is yet to be tested?
 
-- Auths are checked correctly.
-- Non-contract address types
 - Admin methods other than `mint`. There is no standard
   admin interface for Soroban tokens.
 - Accessor methods don't mutate internal state.
