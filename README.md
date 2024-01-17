@@ -17,6 +17,12 @@ that implement logic that deviates from the example token.
 If you find the fuzzer triggers false positives on your
 token please file issues.**
 
+Install [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz):
+
+```
+cargo install cargo-fuzz
+```
+
 Running the fuzzer against two in-tree tokens:
 
 ```
@@ -99,7 +105,7 @@ After every step various invariants are asserted:
 
 - The sum of all balances is equal to the sum of mints minus the sum of burns.
 - All pairs of addresses have allowance equal to the fuzzer's own accounting of allowances.
-- All current balances are greater than 0.
+- All current balances are greater than or equal to 0.
 - All current balances are equal to the fuzzer's own accounting of balances.
 - Contract calls do not panic (unless it's with `panic_with_error!`).
   An error of type [`WasmVm`](https://docs.rs/soroban-sdk/latest/soroban_sdk/xdr/enum.ScErrorType.html#variant.WasmVm)
