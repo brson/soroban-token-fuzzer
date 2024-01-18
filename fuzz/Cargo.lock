@@ -1132,6 +1132,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban-token-contract"
+version = "0.0.6"
+dependencies = [
+ "soroban-sdk",
+ "soroban-token-sdk",
+]
+
+[[package]]
 name = "soroban-token-fuzzer"
 version = "0.1.0"
 dependencies = [
@@ -1154,6 +1162,7 @@ dependencies = [
  "example-token",
  "libfuzzer-sys",
  "soroban-sdk",
+ "soroban-token-contract",
  "soroban-token-fuzzer",
 ]
 

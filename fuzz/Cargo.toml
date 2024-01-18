@@ -17,6 +17,10 @@ soroban-token-fuzzer.path = ".."
 example-token.path = "../tokens/example-token"
 example-token.features = ["testutils"]
 
+soroswap-token.path = "../../soroswap/core/contracts/token"
+soroswap-token.package = "soroban-token-contract"
+soroswap-token.features = ["testutils"]
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
@@ -43,6 +47,11 @@ path = "fuzz_targets/fuzz_example_token.rs"
 test = false
 doc = false
 
+[[bin]]
+name = "fuzz_soroswap_token"
+path = "fuzz_targets/fuzz_soroswap_token.rs"
+test = false
+doc = false
 
 #[patch.crates-io]
 #soroban-sdk.path = "../../rs-soroban-sdk/soroban-sdk"
