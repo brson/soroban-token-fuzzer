@@ -1134,6 +1134,7 @@ dependencies = [
 [[package]]
 name = "soroban-token-contract"
 version = "0.0.6"
+source = "git+https://github.com/Aimeedeer/soroswap.git?rev=2ed1c005918c746424abe53aa05d2ae560e96815#2ed1c005918c746424abe53aa05d2ae560e96815"
 dependencies = [
  "soroban-sdk",
  "soroban-token-sdk",

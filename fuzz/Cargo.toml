@@ -17,7 +17,8 @@ soroban-token-fuzzer.path = ".."
 example-token.path = "../tokens/example-token"
 example-token.features = ["testutils"]
 
-soroswap-token.path = "../../soroswap/core/contracts/token"
+soroswap-token.git = "https://github.com/Aimeedeer/soroswap.git"
+soroswap-token.rev = "2ed1c005918c746424abe53aa05d2ae560e96815"
 soroswap-token.package = "soroban-token-contract"
 soroswap-token.features = ["testutils"]
 
