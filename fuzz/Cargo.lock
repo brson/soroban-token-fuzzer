@@ -1134,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "soroban-token-contract"
 version = "0.0.6"
-source = "git+https://github.com/Aimeedeer/soroswap.git?rev=2ed1c005918c746424abe53aa05d2ae560e96815#2ed1c005918c746424abe53aa05d2ae560e96815"
+source = "git+https://github.com/Aimeedeer/soroswap.git?rev=6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a#6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
 dependencies = [
  "soroban-sdk",
  "soroban-token-sdk",
@@ -1165,6 +1165,7 @@ dependencies = [
  "soroban-sdk",
  "soroban-token-contract",
  "soroban-token-fuzzer",
+ "soroswap-pair",
 ]
 
 [[package]]
@@ -1187,6 +1188,23 @@ dependencies = [
  "wasmi_arena",
  "wasmi_core",
  "wasmparser-nostd",
+]
+
+[[package]]
+name = "soroswap-factory-interface"
+version = "0.0.1"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "soroswap-pair"
+version = "0.0.1"
+dependencies = [
+ "num-integer",
+ "soroban-sdk",
+ "soroban-token-sdk",
+ "soroswap-factory-interface",
 ]
 
 [[package]]

@@ -18,9 +18,15 @@ example-token.path = "../tokens/example-token"
 example-token.features = ["testutils"]
 
 soroswap-token.git = "https://github.com/Aimeedeer/soroswap.git"
-soroswap-token.rev = "2ed1c005918c746424abe53aa05d2ae560e96815"
+soroswap-token.rev = "6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
 soroswap-token.package = "soroban-token-contract"
 soroswap-token.features = ["testutils"]
+
+soroswap-pair-token.path = "../../soroswap/core/contracts/pair"
+#soroswap-pair-token.git = "https://github.com/Aimeedeer/soroswap.git"
+#soroswap-pair-token.rev = "6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
+soroswap-pair-token.package = "soroswap-pair"
+soroswap-pair-token.features = ["testutils"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -51,6 +57,12 @@ doc = false
 [[bin]]
 name = "fuzz_soroswap_token"
 path = "fuzz_targets/fuzz_soroswap_token.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_soroswap_pair_token"
+path = "fuzz_targets/fuzz_soroswap_pair_token.rs"
 test = false
 doc = false
 
