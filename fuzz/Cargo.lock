@@ -413,6 +413,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "excellar-token-contract"
+version = "0.1.0"
+source = "git+https://github.com/Aimeedeer/excellar.git?rev=23684ff32c7408db364af7a33a37427b38b2a746#23684ff32c7408db364af7a33a37427b38b2a746"
+dependencies = [
+ "soroban-sdk",
+ "soroban-token-sdk",
+]
+
+[[package]]
 name = "ff"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1161,6 +1170,7 @@ name = "soroban-token-fuzzer-driver"
 version = "0.1.0"
 dependencies = [
  "example-token",
+ "excellar-token-contract",
  "libfuzzer-sys",
  "soroban-sdk",
  "soroban-token-contract",
