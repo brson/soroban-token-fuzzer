@@ -43,6 +43,11 @@ phoenix.rev = "be66c3ab027efd4426745db9ec8b468243cb18df"
 phoenix.package = "soroban-token-contract"
 phoenix.features = ["testutils"]
 
+mobloom.git = "https://github.com/Aimeedeer/Mobloom-soroban-contracts.git"
+mobloom.rev = "63137cf1031e90a55bfad861a80a68e1ad2d98ce"
+mobloom.package = "soroban-token-contract"
+mobloom.features = ["testutils"]
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
@@ -96,6 +101,12 @@ doc = false
 [[bin]]
 name = "fuzz_phoenix_token"
 path = "fuzz_targets/fuzz_phoenix_token.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_mobloom_token"
+path = "fuzz_targets/fuzz_mobloom_token.rs"
 test = false
 doc = false
 
