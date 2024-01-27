@@ -38,6 +38,11 @@ aquarius.rev = "3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
 aquarius.package = "soroban-token-contract"
 aquarius.features = ["testutils"]
 
+phoenix.git = "https://github.com/Aimeedeer/phoenix-contracts.git"
+phoenix.rev = "be66c3ab027efd4426745db9ec8b468243cb18df"
+phoenix.package = "soroban-token-contract"
+phoenix.features = ["testutils"]
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
@@ -85,6 +90,12 @@ doc = false
 [[bin]]
 name = "fuzz_aquarius_token"
 path = "fuzz_targets/fuzz_aquarius_token.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_phoenix_token"
+path = "fuzz_targets/fuzz_phoenix_token.rs"
 test = false
 doc = false
 

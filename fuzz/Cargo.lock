@@ -1160,6 +1160,15 @@ dependencies = [
 
 [[package]]
 name = "soroban-token-contract"
+version = "0.0.6"
+source = "git+https://github.com/Aimeedeer/phoenix-contracts.git?rev=be66c3ab027efd4426745db9ec8b468243cb18df#be66c3ab027efd4426745db9ec8b468243cb18df"
+dependencies = [
+ "soroban-sdk",
+ "soroban-token-sdk",
+]
+
+[[package]]
+name = "soroban-token-contract"
 version = "0.1.0"
 source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
 dependencies = [
@@ -1193,7 +1202,8 @@ dependencies = [
  "excellar-token-contract",
  "libfuzzer-sys",
  "soroban-sdk",
- "soroban-token-contract 0.0.6",
+ "soroban-token-contract 0.0.6 (git+https://github.com/Aimeedeer/soroswap.git?rev=6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a)",
+ "soroban-token-contract 0.0.6 (git+https://github.com/Aimeedeer/phoenix-contracts.git?rev=be66c3ab027efd4426745db9ec8b468243cb18df)",
  "soroban-token-contract 0.1.0",
  "soroban-token-fuzzer",
  "soroswap-pair",
