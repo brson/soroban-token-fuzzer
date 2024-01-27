@@ -4,8 +4,8 @@ use libfuzzer_sys::{fuzz_target, Corpus};
 use soroban_sdk::{Address, Env, Error, InvokeError, String, TryFromVal, Val};
 use soroban_token_fuzzer::*;
 
-use mobloom::TokenClient;
 use mobloom::contract::Token;
+use mobloom::TokenClient;
 
 // This is the entrypoint.
 //

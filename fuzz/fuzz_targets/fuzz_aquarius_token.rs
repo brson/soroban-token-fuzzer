@@ -4,8 +4,8 @@ use libfuzzer_sys::{fuzz_target, Corpus};
 use soroban_sdk::{Address, Env, Error, InvokeError, String, TryFromVal, Val};
 use soroban_token_fuzzer::*;
 
-use aquarius::TokenClient;
 use aquarius::contract::Token;
+use aquarius::TokenClient;
 
 // This is the entrypoint.
 //
