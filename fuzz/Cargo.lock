@@ -3,6 +3,15 @@
 version = 3
 
 [[package]]
+name = "access_control"
+version = "0.1.0"
+source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+dependencies = [
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1060,9 +1069,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-ledger-snapshot"
-version = "20.1.0"
+version = "20.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d0f4b117c50bec49f02eab898957f92f13cae78ee3d17d7660821742251b8c2"
+checksum = "02b4166fef4218b0a23d9ef58f48dc57cf56bf7fbe46d410e0f8672e8986b42b"
 dependencies = [
  "serde",
  "serde_json",
@@ -1074,9 +1083,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk"
-version = "20.1.0"
+version = "20.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e6c13c0f657bec67785cb7d204fcaccca553f937a42743c6acedfd993ad69f6"
+checksum = "cf12b257428a9ec762491e76f80f7d7a6fa3b7994adbbdc559c787f64fcebff5"
 dependencies = [
  "arbitrary",
  "bytes-lit",
@@ -1094,9 +1103,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk-macros"
-version = "20.1.0"
+version = "20.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc7e5d144250bbea143f0863462e58200e2a82e37fa611b09f239f3d8e849a83"
+checksum = "74e591efb1b5850fb5c95dcac9efcd65fa3168f041fe7204edd4ecf592f01f21"
 dependencies = [
  "crate-git-revision",
  "darling",
@@ -1114,9 +1123,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-spec"
-version = "20.1.0"
+version = "20.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba4550e1498552b464bf8583c16abd0670568285c1513091cf3c0ea82f41a229"
+checksum = "9bc6f22d7c303d8cb6e12d2dd04d4dfb38d773292f2721ea5ac15d3b0fd51c6c"
 dependencies = [
  "base64 0.13.1",
  "stellar-xdr",
@@ -1126,9 +1135,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-spec-rust"
-version = "20.1.0"
+version = "20.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a1bf5452f0d97cf280f14b66de98571e819e198b124b33472e49dba1128ed9d"
+checksum = "4ffcc7e96ae13c3fdce8b132be2949784fc23d2234e9e591817e1b21ace9aa06"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -1147,6 +1156,17 @@ source = "git+https://github.com/Aimeedeer/soroswap.git?rev=6cf027370dbee39cb0a8
 dependencies = [
  "soroban-sdk",
  "soroban-token-sdk",
+]
+
+[[package]]
+name = "soroban-token-contract"
+version = "0.1.0"
+source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+dependencies = [
+ "access_control",
+ "soroban-sdk",
+ "soroban-token-sdk",
+ "utils",
 ]
 
 [[package]]
@@ -1173,16 +1193,17 @@ dependencies = [
  "excellar-token-contract",
  "libfuzzer-sys",
  "soroban-sdk",
- "soroban-token-contract",
+ "soroban-token-contract 0.0.6",
+ "soroban-token-contract 0.1.0",
  "soroban-token-fuzzer",
  "soroswap-pair",
 ]
 
 [[package]]
 name = "soroban-token-sdk"
-version = "20.0.3"
+version = "20.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23f745e0a5a3331349736d1b448129e41c85ccd50ba66bc4f5b22ff467a8a70b"
+checksum = "b2a34c82ea70ff681aebeb3db80caf7f096160288c0c644d266e05a0fbabcc01"
 dependencies = [
  "soroban-sdk",
 ]
@@ -1348,6 +1369,14 @@ name = "unicode-ident"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
+
+[[package]]
+name = "utils"
+version = "0.1.0"
+source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "version_check"
