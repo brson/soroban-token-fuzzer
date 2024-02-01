@@ -22,9 +22,8 @@ soroswap-token.rev = "6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
 soroswap-token.package = "soroban-token-contract"
 soroswap-token.features = ["testutils"]
 
-soroswap-pair-token.path = "../../soroswap/core/contracts/pair"
-#soroswap-pair-token.git = "https://github.com/Aimeedeer/soroswap.git"
-#soroswap-pair-token.rev = "6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
+soroswap-pair-token.git = "https://github.com/Aimeedeer/soroswap.git"
+soroswap-pair-token.rev = "4798ec0202cfee014f73af7158806a34e99dffb1"
 soroswap-pair-token.package = "soroswap-pair"
 soroswap-pair-token.features = ["testutils"]
 

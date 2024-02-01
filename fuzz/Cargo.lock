@@ -1244,6 +1244,7 @@ dependencies = [
 [[package]]
 name = "soroswap-factory-interface"
 version = "0.0.1"
+source = "git+https://github.com/Aimeedeer/soroswap.git?rev=4798ec0202cfee014f73af7158806a34e99dffb1#4798ec0202cfee014f73af7158806a34e99dffb1"
 dependencies = [
  "soroban-sdk",
 ]
@@ -1251,6 +1252,7 @@ dependencies = [
 [[package]]
 name = "soroswap-pair"
 version = "0.0.1"
+source = "git+https://github.com/Aimeedeer/soroswap.git?rev=4798ec0202cfee014f73af7158806a34e99dffb1#4798ec0202cfee014f73af7158806a34e99dffb1"
 dependencies = [
  "num-integer",
  "soroban-sdk",
