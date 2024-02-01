@@ -17,6 +17,7 @@ use soroban_sdk::xdr::{
 };
 use soroban_sdk::xdr::{Limited, Limits, WriteXdr};
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
+use soroban_sdk::xdr::{LedgerKey, ContractDataDurability};
 use soroban_sdk::{
     contract, contractimpl, contracttype, token::Client, Address, Bytes, BytesN, Env, Error,
     IntoVal, InvokeError, TryFromVal, Val,
@@ -243,6 +244,8 @@ fn exec_command(
                     .into_val(env),
             );
 
+            let pre_snapshot = env.to_snapshot();
+
             let r = token_client.try_transfer_from(
                 &accounts[input.spender_account_index].address,
                 &accounts[input.from_account_index].address,
@@ -262,6 +265,14 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
+
+                let post_snapshot = env.to_snapshot();
+                check_for_zero_allowance_bug(
+                    &current_state.token_client.address,
+                    input.amount,
+                    pre_snapshot,
+                    post_snapshot
+                );
 
                 contract_state
                     .sub_balance(&accounts[input.from_account_index].address, input.amount);
@@ -837,4 +848,53 @@ fn sign_payload_for_account(
         public_key: BytesN::<32>::try_from_val(env, &signer.verifying_key().to_bytes()).unwrap(),
         signature: BytesN::<64>::try_from_val(env, &signer.sign(payload).to_bytes()).unwrap(),
     }
+}
+
+/// Check that after transfer_from,
+/// if the transfer amount is 0,
+/// that the ttl of the allowance has not changed.
+///
+/// Because we can't know the storage key of the allowance,
+/// we use a heuristic - that _no_ temporary ttls have changed.
+//
+// cc https://github.com/brson/soroban-token-fuzzer/issues/1
+fn check_for_zero_allowance_bug(
+    contract_address: &Address,
+    amount: i128,
+    pre_snapshot: Snapshot,
+    post_snapshot: Snapshot,
+) {
+    let contract_address = ScAddress::try_from(contract_address).unwrap();
+
+    if amount != 0 {
+        return;
+    }
+
+    let get_temp_ttls = |snapshot: &Snapshot| -> RustVec<Option<u32>> {
+        snapshot.ledger.ledger_entries.iter().filter_map(|(key, (_entry, ttl))| {
+            match **key {
+                LedgerKey::ContractData(ref data) => {
+                    // Only worry about storage for the contract under test
+                    if data.contract != contract_address {
+                        return None;
+                    }
+                    match data.durability {
+                        ContractDataDurability::Temporary => {
+                            Some(*ttl)
+                        }
+                        _ => {
+                            None
+                        }
+                    }
+                }
+                _ => {
+                    None
+                }
+            }
+        }).collect()
+    };
+
+    let pre_ttls = get_temp_ttls(&pre_snapshot);
+    let post_ttls = get_temp_ttls(&post_snapshot);
+    assert_eq!(pre_ttls, post_ttls);
 }
