@@ -56,7 +56,6 @@ pub struct MintInput {
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct ApproveInput {
     pub amount: SmartI128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     pub expiration_ledger: u32,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
@@ -148,7 +147,6 @@ pub struct BurnInput {
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct ApproveAndTransferFromInput {
     pub amount: SmartI128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     pub expiration_ledger: u32,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
@@ -170,7 +168,6 @@ pub struct ApproveAndTransferFromInput {
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct ApproveAndBurnFromInput {
     pub amount: SmartI128,
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     pub expiration_ledger: u32,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
