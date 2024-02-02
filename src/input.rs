@@ -3,6 +3,7 @@ use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
 use soroban_sdk::testutils::arbitrary::arbitrary;
 use std::vec::Vec as RustVec;
+use crate::util::SmartI128;
 
 pub const NUMBER_OF_ADDRESSES: usize = 3;
 
@@ -38,8 +39,7 @@ pub enum Command {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct MintInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub to_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| {
@@ -55,8 +55,7 @@ pub struct MintInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct ApproveInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     pub expiration_ledger: u32,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
@@ -76,8 +75,7 @@ pub struct ApproveInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct TransferFromInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub spender_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
@@ -97,8 +95,7 @@ pub struct TransferFromInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct TransferInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
@@ -116,8 +113,7 @@ pub struct TransferInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct BurnFromInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub spender_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
@@ -135,8 +131,7 @@ pub struct BurnFromInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct BurnInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
     pub from_account_index: usize,
     #[arbitrary(with = |u: &mut Unstructured| {
@@ -152,8 +147,7 @@ pub struct BurnInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct ApproveAndTransferFromInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     pub expiration_ledger: u32,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]
@@ -175,8 +169,7 @@ pub struct ApproveAndTransferFromInput {
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct ApproveAndBurnFromInput {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(i128::MIN..=i128::MAX))]
-    pub amount: i128,
+    pub amount: SmartI128,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=DAY_IN_LEDGERS * 30))]
     pub expiration_ledger: u32,
     #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(0..=NUMBER_OF_ADDRESSES - 1))]

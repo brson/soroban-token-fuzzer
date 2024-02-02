@@ -160,14 +160,14 @@ fn exec_command(
                 current_state,
                 token_contract_id_bytes,
                 signature_nonce,
-                (&accounts[input.to_account_index].address, input.amount).into_val(env),
+                (&accounts[input.to_account_index].address, input.amount.0).into_val(env),
             );
 
-            let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount);
+            let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount.0);
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount < 0 {
+            if input.amount.0 < 0 {
                 assert!(r.is_err());
             }
 
@@ -178,9 +178,9 @@ fn exec_command(
             if let Ok(r) = r {
                 let _r = r.expect("ok");
 
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
+                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
                 contract_state.sum_of_mints =
-                    contract_state.sum_of_mints.clone() + BigInt::from(input.amount);
+                    contract_state.sum_of_mints.clone() + BigInt::from(input.amount.0);
             }
         }
         Command::Approve(input) => {
@@ -194,7 +194,7 @@ fn exec_command(
                 (
                     &accounts[input.from_account_index].address,
                     &accounts[input.spender_account_index].address,
-                    input.amount,
+                    input.amount.0,
                     input.expiration_ledger,
                 )
                     .into_val(env),
@@ -203,13 +203,13 @@ fn exec_command(
             let r = token_client.try_approve(
                 &accounts[input.from_account_index].address,
                 &accounts[input.spender_account_index].address,
-                &input.amount,
+                &input.amount.0,
                 &input.expiration_ledger,
             );
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount < 0 {
+            if input.amount.0 < 0 {
                 assert!(r.is_err());
             }
 
@@ -223,7 +223,7 @@ fn exec_command(
                 contract_state.set_allowance(
                     &accounts[input.from_account_index].address,
                     &accounts[input.spender_account_index].address,
-                    input.amount,
+                    input.amount.0,
                 );
             }
         }
@@ -239,7 +239,7 @@ fn exec_command(
                     &accounts[input.spender_account_index].address,
                     &accounts[input.from_account_index].address,
                     &accounts[input.to_account_index].address,
-                    input.amount,
+                    input.amount.0,
                 )
                     .into_val(env),
             );
@@ -250,12 +250,12 @@ fn exec_command(
                 &accounts[input.spender_account_index].address,
                 &accounts[input.from_account_index].address,
                 &accounts[input.to_account_index].address,
-                &input.amount,
+                &input.amount.0,
             );
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount < 0 {
+            if input.amount.0 < 0 {
                 assert!(r.is_err());
             }
 
@@ -269,19 +269,19 @@ fn exec_command(
                 let post_snapshot = env.to_snapshot();
                 check_for_zero_allowance_bug(
                     &current_state.token_client.address,
-                    input.amount,
+                    input.amount.0,
                     pre_snapshot,
                     post_snapshot
                 );
 
                 contract_state
-                    .sub_balance(&accounts[input.from_account_index].address, input.amount);
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
+                    .sub_balance(&accounts[input.from_account_index].address, input.amount.0);
+                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
 
                 contract_state.sub_allowance(
                     &accounts[input.from_account_index].address,
                     &accounts[input.spender_account_index].address,
-                    input.amount,
+                    input.amount.0,
                 );
             }
         }
@@ -296,7 +296,7 @@ fn exec_command(
                 (
                     &accounts[input.from_account_index].address,
                     &accounts[input.to_account_index].address,
-                    input.amount,
+                    input.amount.0,
                 )
                     .into_val(env),
             );
@@ -304,12 +304,12 @@ fn exec_command(
             let r = token_client.try_transfer(
                 &accounts[input.from_account_index].address,
                 &accounts[input.to_account_index].address,
-                &input.amount,
+                &input.amount.0,
             );
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount < 0 {
+            if input.amount.0 < 0 {
                 assert!(r.is_err());
             }
 
@@ -321,8 +321,8 @@ fn exec_command(
                 let _r = r.expect("ok");
 
                 contract_state
-                    .sub_balance(&accounts[input.from_account_index].address, input.amount);
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount);
+                    .sub_balance(&accounts[input.from_account_index].address, input.amount.0);
+                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
             }
         }
         Command::BurnFrom(input) => {
@@ -336,7 +336,7 @@ fn exec_command(
                 (
                     &accounts[input.spender_account_index].address,
                     &accounts[input.from_account_index].address,
-                    input.amount,
+                    input.amount.0,
                 )
                     .into_val(env),
             );
@@ -344,12 +344,12 @@ fn exec_command(
             let r = token_client.try_burn_from(
                 &accounts[input.spender_account_index].address,
                 &accounts[input.from_account_index].address,
-                &input.amount,
+                &input.amount.0,
             );
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount < 0 {
+            if input.amount.0 < 0 {
                 assert!(r.is_err());
             }
 
@@ -361,16 +361,16 @@ fn exec_command(
                 let _r = r.expect("ok");
 
                 contract_state
-                    .sub_balance(&accounts[input.from_account_index].address, input.amount);
+                    .sub_balance(&accounts[input.from_account_index].address, input.amount.0);
 
                 contract_state.sub_allowance(
                     &accounts[input.from_account_index].address,
                     &accounts[input.spender_account_index].address,
-                    input.amount,
+                    input.amount.0,
                 );
 
                 contract_state.sum_of_burns =
-                    contract_state.sum_of_burns.clone() + &BigInt::from(input.amount);
+                    contract_state.sum_of_burns.clone() + &BigInt::from(input.amount.0);
             }
         }
         Command::Burn(input) => {
@@ -381,15 +381,15 @@ fn exec_command(
                 current_state,
                 token_contract_id_bytes,
                 signature_nonce,
-                (&accounts[input.from_account_index].address, input.amount).into_val(env),
+                (&accounts[input.from_account_index].address, input.amount.0).into_val(env),
             );
 
             let r =
-                token_client.try_burn(&accounts[input.from_account_index].address, &input.amount);
+                token_client.try_burn(&accounts[input.from_account_index].address, &input.amount.0);
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount < 0 {
+            if input.amount.0 < 0 {
                 assert!(r.is_err());
             }
 
@@ -401,10 +401,10 @@ fn exec_command(
                 let _r = r.expect("ok");
 
                 contract_state
-                    .sub_balance(&accounts[input.from_account_index].address, input.amount);
+                    .sub_balance(&accounts[input.from_account_index].address, input.amount.0);
 
                 contract_state.sum_of_burns =
-                    contract_state.sum_of_burns.clone() + &BigInt::from(input.amount);
+                    contract_state.sum_of_burns.clone() + &BigInt::from(input.amount.0);
             }
         }
         Command::ApproveAndTransferFrom(input) => {
