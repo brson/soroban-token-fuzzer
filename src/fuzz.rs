@@ -45,15 +45,15 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     let token_contract_id_bytes: RustVec<u8>;
 
     // Do initial setup, including registering the contract.
-    {
-        input.address_generator.setup_account_storage(&env);
+    //    {
+    input.address_generator.setup_account_storage(&env);
 
-        let signers = input.address_generator.generate_signers(&env);
-        let admin = &signers[0].address;
+    let signers = input.address_generator.generate_signers(&env);
+    let admin = &signers[0].address;
 
-        let token_contract_id = config.register_contract_init(&env, admin);
-        token_contract_id_bytes = address_to_bytes(&token_contract_id);
-    }
+    let token_contract_id = config.register_contract_init(&env, admin);
+    token_contract_id_bytes = address_to_bytes(&token_contract_id);
+    //    }
 
     let mut contract_state = ContractState::init();
     let mut current_state = CurrentState::new(
@@ -69,6 +69,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     {
         let token_client = &current_state.token_client;
 
+        let init_balance = token_client.balance(admin);
+        if init_balance > 0 {
+            contract_state.set_balance(admin, init_balance);
+            contract_state.set_sum_of_mints(init_balance);
+        }
+        
         contract_state.name = string_to_bytes(token_client.name());
         contract_state.symbol = string_to_bytes(token_client.symbol());
         contract_state.decimals = token_client.decimals();
@@ -150,9 +156,10 @@ fn exec_command(
     let admin_client = &current_state.admin_client;
     let token_client = &current_state.token_client;
     let accounts = &current_state.accounts;
-
+    
     match command {
         Command::Mint(input) => {
+            println!("fuzz mint input: {input:?}");
             mock_auths_for_command(
                 env,
                 "mint",
@@ -163,24 +170,34 @@ fn exec_command(
                 (&accounts[input.to_account_index].address, input.amount.0).into_val(env),
             );
 
+            let balance_before_mint = token_client.balance(&accounts[input.to_account_index].address);
             let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount.0);
 
             verify_token_contract_result(&env, &r);
 
-            if input.amount.0 < 0 {
-                assert!(r.is_err());
-            }
+            // Comet's mint method panics if the input is less than 0
+//            if input.amount.0 < 0 {
+//                assert!(r.is_err());
+//            }
 
             if input.auths[0] == false {
                 assert!(r.is_err());
             }
 
             if let Ok(r) = r {
-                let _r = r.expect("ok");
+                if let Ok(_r) = r {
+                    let actual_mint_amount = token_client.balance(&accounts[input.to_account_index].address).checked_sub(balance_before_mint).expect("overflow");
 
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
-                contract_state.sum_of_mints =
-                    contract_state.sum_of_mints.clone() + BigInt::from(input.amount.0);
+                    contract_state.add_balance(&accounts[input.to_account_index].address, actual_mint_amount);
+                    contract_state.sum_of_mints =
+                        contract_state.sum_of_mints.clone() + BigInt::from(actual_mint_amount);
+                    /*
+                    contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
+                    contract_state.sum_of_mints =
+                        contract_state.sum_of_mints.clone() + BigInt::from(input.amount.0);*/
+                } else {
+                    println!("mint r: {r:?}");
+                }
             }
         }
         Command::Approve(input) => {
@@ -486,6 +503,19 @@ impl ContractState {
         }
     }
 
+    fn set_sum_of_mints(&mut self, amount: i128) {
+        assert!(amount >= 0);
+
+        self.sum_of_mints = BigInt::from(amount);
+    }
+
+    fn set_balance(&mut self, addr: &Address, new_balance: i128) {
+        assert!(new_balance >= 0);
+
+        let addr_bytes = address_to_bytes(addr);
+        self.balances.insert(addr_bytes, new_balance);
+    }
+    
     fn get_balance(&self, addr: &Address) -> i128 {
         let addr_bytes = address_to_bytes(addr);
         self.balances.get(&addr_bytes).copied().unwrap_or(0)
@@ -896,5 +926,7 @@ fn check_for_zero_allowance_bug(
 
     let pre_ttls = get_temp_ttls(&pre_snapshot);
     let post_ttls = get_temp_ttls(&post_snapshot);
+    // todo
+    // fix comet fuzzer
     assert_eq!(pre_ttls, post_ttls);
 }

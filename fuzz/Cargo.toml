@@ -47,6 +47,11 @@ mobloom.rev = "63137cf1031e90a55bfad861a80a68e1ad2d98ce"
 mobloom.package = "soroban-token-contract"
 mobloom.features = ["testutils"]
 
+comet.path = "../../comet-contracts-v1/contracts/"
+comet.package = "contracts"
+comet.features = ["testutils"]
+soroban-fixed-point-math = "1.0.0"
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
@@ -106,6 +111,12 @@ doc = false
 [[bin]]
 name = "fuzz_mobloom_token"
 path = "fuzz_targets/fuzz_mobloom_token.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_comet_token"
+path = "fuzz_targets/fuzz_comet_token.rs"
 test = false
 doc = false
 
