@@ -4,6 +4,8 @@ use libfuzzer_sys::{fuzz_target, Corpus};
 use soroban_sdk::{Address, Env, Error, InvokeError, String, TryFromVal, Val, unwrap::UnwrapOptimized, ConversionError, xdr::Error as XdrError};
 use soroban_token_fuzzer::*;
 use example_token;
+use soroban_sdk::testutils::Address as _;
+use soroban_sdk::token;
 
 use comet::c_pool::comet::{CometPoolContract, CometPoolContractClient};
 use comet::c_consts::{MAX_CPOW_BASE, MIN_CPOW_BASE, BONE};
@@ -101,6 +103,22 @@ impl ContractTokenOps for TokenOps {
         Box::new(AdminClient {
             client: CometPoolContractClient::new(&env, &token_contract_id),
         })
+    }
+
+    fn keep_contracts_alive(&self, env: &Env, token_contract_id: &Address) {
+        let token_client = token::Client::new(&env, &token_contract_id);
+        token_client.allowance(&Address::generate(&env), &Address::generate(&env));
+
+        let admin_client = AdminClient {
+            client: CometPoolContractClient::new(&env, &token_contract_id),
+        };
+
+        let (addr1, addr2) = admin_client.get_token_addresses();
+
+        let token_1_client = token::Client::new(&env, &addr1);
+        token_1_client.allowance(&Address::generate(&env), &Address::generate(&env));
+        let token_2_client = token::Client::new(&env, &addr2);
+        token_2_client.allowance(&Address::generate(&env), &Address::generate(&env));
     }
 }
 

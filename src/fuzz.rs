@@ -8,7 +8,7 @@ use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
 use sha2::{Digest, Sha256};
-use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo};
+use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::testutils::Snapshot;
 use soroban_sdk::xdr::{
     HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, ScAddress, ScSymbol,
@@ -670,12 +670,7 @@ fn advance_time(
         if next_ledger == to_ledger {
             break;
         } else {
-            // Keep the contract alive
-            let token_contract_id =
-                Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
-            let token_client = Client::new(&env, &token_contract_id);
-            let r = token_client.try_allowance(&Address::generate(&env), &Address::generate(&env));
-            assert!(r.is_ok());
+            config.keep_contracts_alive(&env, &token_contract_id);
         }
     }
 

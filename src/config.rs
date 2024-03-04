@@ -2,6 +2,8 @@ use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::SorobanAuthorizationEntry;
 use soroban_sdk::{Address, Env};
 use soroban_sdk::{Error, InvokeError, TryFromVal, Val};
+use soroban_sdk::token;
+use soroban_sdk::testutils::Address as _;
 
 /// Token-specific configuration and customization.
 ///
@@ -42,6 +44,12 @@ pub trait ContractTokenOps {
         env: &Env,
         token_contract_id: &Address,
     ) -> Box<dyn TokenAdminClient<'a> + 'a>;
+
+    fn keep_contracts_alive(&self, env: &Env, token_contract_id: &Address) {
+        let token_client = token::Client::new(&env, &token_contract_id);
+        let r = token_client.try_allowance(&Address::generate(&env), &Address::generate(&env));
+        assert!(r.is_ok());
+    }
 }
 
 pub trait TokenAdminClient<'a> {
@@ -92,6 +100,13 @@ impl Config {
         }
     }
 
+    pub fn keep_contracts_alive(&self, env: &Env, token_contract_id: &Address) {
+        match &self.kind {
+            TokenKind::Native => { /* nop */ }
+            TokenKind::Contract(cfg) => cfg.keep_contracts_alive(env, token_contract_id),
+        }
+    }
+
     pub fn new_admin_client<'a>(
         &self,
         env: &Env,
@@ -135,5 +150,9 @@ impl ContractTokenConfig {
         token_contract_id: &Address,
     ) -> Box<dyn TokenAdminClient<'a> + 'a> {
         self.ops.new_admin_client(env, token_contract_id)
+    }
+
+    pub fn keep_contracts_alive(&self, env: &Env, token_contract_id: &Address) {
+        self.ops.keep_contracts_alive(env, token_contract_id)
     }
 }
