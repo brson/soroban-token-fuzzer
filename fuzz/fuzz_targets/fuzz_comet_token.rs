@@ -60,12 +60,12 @@ impl ContractTokenOps for TokenOps {
         let token_client_2 = create_and_init_token_contract(env, admin, "TOKENTWO", "TOKENTWO");
 
         env.mock_all_auths();
-        token_client_1.mint(admin, &i128::MAX);
-        token_client_2.mint(admin, &i128::MAX);
+        token_client_1.mint(admin, &to_stroop(50_000));
+        token_client_2.mint(admin, &to_stroop(50_000));
 
         // todo: const numbers
-        admin_client.bind(&token_client_1.address, &to_stroop(40_000), &to_stroop(12), admin);
-        admin_client.bind(&token_client_2.address, &to_stroop(50_000), &to_stroop(15), admin);
+        admin_client.bind(&token_client_1.address, &to_stroop(50_000), &to_stroop(12), admin);
+        admin_client.bind(&token_client_2.address, &to_stroop(50_000), &to_stroop(12), admin);
 
         let controller = admin.clone();
         admin_client.set_swap_fee(&3_000, &controller);
@@ -81,6 +81,15 @@ impl ContractTokenOps for TokenOps {
     /// and the `Env` is recreated.
     fn reregister_contract(&self, env: &Env, token_contract_id: &Address) {
         env.register_contract(Some(token_contract_id), CometPoolContract);
+
+        let admin_client = AdminClient {
+            client: CometPoolContractClient::new(&env, &token_contract_id),
+        };
+
+        let (addr1, addr2) = admin_client.get_token_addresses();
+
+        env.register_contract(Some(&addr1), example_token::contract::Token);
+        env.register_contract(Some(&addr2), example_token::contract::Token);
     }
 
     /// Create an admin client.
@@ -95,6 +104,18 @@ impl ContractTokenOps for TokenOps {
     }
 }
 
+impl<'a> AdminClient<'a> {
+    fn get_token_addresses(&self) -> (Address, Address) {
+        let pool_tokens = self.client.get_tokens();
+        assert_eq!(pool_tokens.len(), 2);
+
+        let token_address_1 = pool_tokens.get(0).unwrap_optimized();
+        let token_address_2 = pool_tokens.get(1).unwrap_optimized();
+
+        (token_address_1, token_address_2)
+    }
+}
+
 impl<'a> TokenAdminClient<'a> for AdminClient<'a> {
     fn try_mint(
         &self,
@@ -104,47 +125,20 @@ impl<'a> TokenAdminClient<'a> for AdminClient<'a> {
         self.client.env.mock_all_auths();
         self.client.env.budget().reset_unlimited();
 
-        // todo: the number 100 is a random guess for minimal amount allowed
-        if *amount <= 100{
-            return Ok(Err(ConversionError::from(XdrError::Invalid)));
-        }
-        println!("**** try_mint. amount: {amount}");
-
-        let pool_supply = self.client.get_total_supply();
-        let new_pool_supply = pool_supply.checked_add(*amount).unwrap();
-        let pool_ratio = new_pool_supply.fixed_div_floor(pool_supply, BONE).unwrap();
-
-        if pool_ratio < MIN_CPOW_BASE || pool_ratio > MAX_CPOW_BASE {
-            return Ok(Err(ConversionError::from(XdrError::Invalid)));
-        }
-
-        let pool_tokens = self.client.get_tokens();
-        assert_eq!(pool_tokens.len(), 2);
-
-        let token_address_1 = pool_tokens.get(0).unwrap_optimized();
-        let token_address_2 = pool_tokens.get(1).unwrap_optimized();
+        let (token_address_1, token_address_2) = self.get_token_addresses();
         
         let token_client_1 = example_token::TokenClient::new(&self.client.env, &token_address_1);
         let token_client_2 = example_token::TokenClient::new(&self.client.env, &token_address_2);
+
+        let balance_1 = token_client_1.balance(to);
+        let balance_2 = token_client_2.balance(to);
+
+        token_client_1.mint(to, &(i128::MAX - balance_1));
+        token_client_2.mint(to, &(i128::MAX - balance_2));
         
-        let r = panic::catch_unwind(AssertUnwindSafe(|| {
-            let need_amount_in_1 = self.client.dep_lp_tokn_amt_out_get_tokn_in(&token_address_1, amount, &i128::MAX, to);
-            let need_amount_in_2 = self.client.dep_lp_tokn_amt_out_get_tokn_in(&token_address_2, amount, &i128::MAX, to);
+        let max_amounts_in = soroban_sdk::vec![&self.client.env, i128::MAX, i128::MAX];
 
-            println!("- need_amount_in_1: {need_amount_in_1}");
-            println!("- need_amount_in_2: {need_amount_in_2}");
-
-            token_client_1.mint(to, &need_amount_in_1);
-            token_client_2.mint(to, &need_amount_in_2);
-
-            let max_amounts_in = soroban_sdk::vec![&self.client.env, need_amount_in_1, need_amount_in_2];
-            println!("before join_pool. max_amounts_in: {max_amounts_in:#?}");
-
-            self.client.join_pool(amount, &max_amounts_in, to);
-        }));
-        assert!(r.is_err());
-
-        println!("**** catch_unwind r: {r:#?}");
+        self.client.join_pool(amount, &max_amounts_in, to);
         
         Ok(Ok(()))
     }
