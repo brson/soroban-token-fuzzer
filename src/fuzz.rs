@@ -38,9 +38,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
     //eprintln!("input: {input:#?}");
 
+    let mut env_prng_seed: u64 = 0;
+
     // The initial Env. This will be destroyed and recreated when we advance time,
     // to simulate distinct transactions.
     let mut env = Env::default();
+    set_env_prng_seed(&env, &mut env_prng_seed);
 
     let token_contract_id_bytes: RustVec<u8>;
 
@@ -104,6 +107,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 env,
                 &token_contract_id_bytes,
                 transaction.advance_ledgers,
+                &mut env_prng_seed,
             );
             // NB: This env is reconstructed and all previous env-based objects are invalid
 
@@ -643,6 +647,7 @@ fn advance_time(
     mut env: Env,
     token_contract_id_bytes: &[u8],
     ledgers: u32,
+    env_prng_seed: &mut u64,
 ) -> Env {
     let to_ledger = env
         .ledger()
@@ -661,7 +666,7 @@ fn advance_time(
 
         let advance_ledgers = next_ledger - curr_ledger;
 
-        env = advance_env(env, advance_ledgers);
+        env = advance_env(env, advance_ledgers, env_prng_seed);
 
         let token_contract_id =
             Address::from_string_bytes(&Bytes::from_slice(&env, &token_contract_id_bytes));
@@ -678,7 +683,11 @@ fn advance_time(
 }
 
 /// Produces a new `Env` after advancing some number of ledgers
-fn advance_env(prev_env: Env, ledgers: u32) -> Env {
+fn advance_env(
+    prev_env: Env,
+    ledgers: u32,
+    env_prng_seed: &mut u64,
+) -> Env {
     use soroban_sdk::testutils::Ledger as _;
 
     let secs_per_ledger = {
@@ -727,6 +736,7 @@ fn advance_env(prev_env: Env, ledgers: u32) -> Env {
         // todo purge events and auths?
 
         let env = Env::from_snapshot(snapshot);
+        set_env_prng_seed(&env, env_prng_seed);
 
         env
     }
@@ -932,4 +942,23 @@ fn check_for_zero_allowance_bug(
     // todo
     // fix comet fuzzer
     assert_eq!(pre_ttls, post_ttls);
+}
+
+fn set_env_prng_seed(
+    env: &Env,
+    env_prng_seed: &mut u64,
+) {
+    let mut seed: [u8; 32] = [0; 32];
+    seed[0] = (*env_prng_seed >> (8 * 0)) as u8;
+    seed[1] = (*env_prng_seed >> (8 * 1)) as u8;
+    seed[2] = (*env_prng_seed >> (8 * 2)) as u8;
+    seed[3] = (*env_prng_seed >> (8 * 3)) as u8;
+    seed[4] = (*env_prng_seed >> (8 * 4)) as u8;
+    seed[5] = (*env_prng_seed >> (8 * 5)) as u8;
+    seed[6] = (*env_prng_seed >> (8 * 6)) as u8;
+    seed[7] = (*env_prng_seed >> (8 * 7)) as u8;
+
+    env.set_base_prng_seed(seed);
+
+    *env_prng_seed += 1;
 }
