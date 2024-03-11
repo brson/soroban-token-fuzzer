@@ -17,11 +17,11 @@ num-bigint = "0.4"
 stellar-strkey = "0.0.8"
 itertools = "0.12.0"
 
-soroban-sdk.version = "20.1.0"
+soroban-sdk.version = "20.4.0"
 
 soroban-sdk.features = ["testutils"]
-soroban-ledger-snapshot = "20.1.0"
-soroban-env-common = "20.1.0"
-soroban-env-host = "20.1.0"
-ed25519-dalek = {version = "=2.0.0", features = ["rand_core"] }
+soroban-ledger-snapshot = "20.2.2"
+soroban-env-common = "20.2.2"
+soroban-env-host = "20.2.2"
+ed25519-dalek = {version = "2.0.0", features = ["rand_core"] }
 sha2 = "=0.10.8"
