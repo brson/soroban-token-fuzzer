@@ -141,7 +141,6 @@ impl<'a> TokenAdminClient<'a> for AdminClient<'a> {
         amount: &i128,
     ) -> Result<Result<(), <() as TryFromVal<Env, Val>>::Error>, Result<Error, InvokeError>> {
         self.client.env.mock_all_auths();
-        self.client.env.budget().reset_unlimited();
 
         let (token_address_1, token_address_2) = self.get_token_addresses();
         
