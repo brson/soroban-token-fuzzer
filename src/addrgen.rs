@@ -14,7 +14,7 @@ use std::vec::Vec as RustVec;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct AddressGenerator {
-    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(u64::MIN..=u64::MAX - NUMBER_OF_ADDRESSES as u64))]
+    #[arbitrary(with = |u: &mut Unstructured| u.int_in_range(u64::MIN + 10..=u64::MAX - NUMBER_OF_ADDRESSES as u64))]
     pub address_seed: u64,
     pub address_types: [AddressType; NUMBER_OF_ADDRESSES],
 }
