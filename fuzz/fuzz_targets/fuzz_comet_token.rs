@@ -11,7 +11,8 @@ use comet::c_pool::comet::{CometPoolContract, CometPoolContractClient};
 use comet::c_consts::{MAX_CPOW_BASE, MIN_CPOW_BASE, BONE};
 use soroban_fixed_point_math::FixedPoint;
 
-use std::panic::{self, AssertUnwindSafe};
+use soroban_sdk::testutils::arbitrary::fuzz_catch_panic;
+use soroban_sdk::xdr::{ScErrorType, ScErrorCode};
 
 // This is the entrypoint.
 //
@@ -155,9 +156,14 @@ impl<'a> TokenAdminClient<'a> for AdminClient<'a> {
         
         let max_amounts_in = soroban_sdk::vec![&self.client.env, i128::MAX, i128::MAX];
 
-        self.client.join_pool(amount, &max_amounts_in, to);
-        
-        Ok(Ok(()))
+        let r = fuzz_catch_panic(|| self.client.join_pool(amount, &max_amounts_in, to));
+        if r.is_err() {
+            Err(Err(
+                Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput).into()
+            ))
+        } else {
+            Ok(Ok(()))
+        }
     }
 }
 

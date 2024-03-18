@@ -167,9 +167,6 @@ fn exec_command(
     
     match command {
         Command::Mint(input) => {
-            let mut input = input.clone();
-            input.amount.0 = 100_000_000;
-
             println!("fuzz mint input: {input:?}");
             mock_auths_for_command(
                 env,
@@ -196,7 +193,7 @@ fn exec_command(
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-
+                /*
                 let actual_mint_amount = token_client.balance(&accounts[input.to_account_index].address).checked_sub(balance_before_mint).expect("overflow");
 
                 if input.amount.0 > 0 {
@@ -206,10 +203,11 @@ fn exec_command(
                 contract_state.add_balance(&accounts[input.to_account_index].address, actual_mint_amount);
                 contract_state.sum_of_mints =
                     contract_state.sum_of_mints.clone() + BigInt::from(actual_mint_amount);
-                /*
+                */
+
                 contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
                 contract_state.sum_of_mints =
-                contract_state.sum_of_mints.clone() + BigInt::from(input.amount.0);*/
+                    contract_state.sum_of_mints.clone() + BigInt::from(input.amount.0);
             }
         }
         Command::Approve(input) => {
