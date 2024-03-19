@@ -8,8 +8,9 @@ use itertools::Itertools;
 use libfuzzer_sys::Corpus;
 use num_bigint::BigInt;
 use sha2::{Digest, Sha256};
-use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
 use soroban_sdk::testutils::Snapshot;
+use soroban_sdk::testutils::{Events, Ledger, LedgerInfo};
+use soroban_sdk::xdr::{ContractDataDurability, LedgerKey};
 use soroban_sdk::xdr::{
     HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, ScAddress, ScSymbol,
     ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
@@ -17,7 +18,6 @@ use soroban_sdk::xdr::{
 };
 use soroban_sdk::xdr::{Limited, Limits, WriteXdr};
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
-use soroban_sdk::xdr::{LedgerKey, ContractDataDurability};
 use soroban_sdk::{
     contract, contractimpl, contracttype, token::Client, Address, Bytes, BytesN, Env, Error,
     IntoVal, InvokeError, TryFromVal, Val,
@@ -77,7 +77,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
             contract_state.set_balance(admin, init_balance);
             contract_state.set_sum_of_mints(init_balance);
         }
-        
+
         contract_state.name = string_to_bytes(token_client.name());
         contract_state.symbol = string_to_bytes(token_client.symbol());
         contract_state.decimals = token_client.decimals();
@@ -159,7 +159,7 @@ fn exec_command(
     let admin_client = &current_state.admin_client;
     let token_client = &current_state.token_client;
     let accounts = &current_state.accounts;
-    
+
     match command {
         Command::Mint(input) => {
             mock_auths_for_command(
@@ -172,7 +172,8 @@ fn exec_command(
                 (&accounts[input.to_account_index].address, input.amount.0).into_val(env),
             );
 
-            let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount.0);
+            let r =
+                admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount.0);
 
             verify_token_contract_result(&env, &r);
 
@@ -188,7 +189,8 @@ fn exec_command(
             if let Ok(r) = r {
                 let _r = r.expect("ok");
 
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
+                contract_state
+                    .add_balance(&accounts[input.to_account_index].address, input.amount.0);
                 contract_state.sum_of_mints =
                     contract_state.sum_of_mints.clone() + BigInt::from(input.amount.0);
             }
@@ -281,12 +283,13 @@ fn exec_command(
                     &current_state.token_client.address,
                     input.amount.0,
                     pre_snapshot,
-                    post_snapshot
+                    post_snapshot,
                 );
 
                 contract_state
                     .sub_balance(&accounts[input.from_account_index].address, input.amount.0);
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
+                contract_state
+                    .add_balance(&accounts[input.to_account_index].address, input.amount.0);
 
                 contract_state.sub_allowance(
                     &accounts[input.from_account_index].address,
@@ -332,7 +335,8 @@ fn exec_command(
 
                 contract_state
                     .sub_balance(&accounts[input.from_account_index].address, input.amount.0);
-                contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
+                contract_state
+                    .add_balance(&accounts[input.to_account_index].address, input.amount.0);
             }
         }
         Command::BurnFrom(input) => {
@@ -508,7 +512,7 @@ impl ContractState {
         let addr_bytes = address_to_bytes(addr);
         self.balances.insert(addr_bytes, new_balance);
     }
-    
+
     fn get_balance(&self, addr: &Address) -> i128 {
         let addr_bytes = address_to_bytes(addr);
         self.balances.get(&addr_bytes).copied().unwrap_or(0)
@@ -664,11 +668,7 @@ fn advance_time(
 }
 
 /// Produces a new `Env` after advancing some number of ledgers
-fn advance_env(
-    prev_env: Env,
-    ledgers: u32,
-    env_prng_seed: &mut u64,
-) -> Env {
+fn advance_env(prev_env: Env, ledgers: u32, env_prng_seed: &mut u64) -> Env {
     use soroban_sdk::testutils::Ledger as _;
 
     let secs_per_ledger = {
@@ -895,27 +895,26 @@ fn check_for_zero_allowance_bug(
     }
 
     let get_temp_ttls = |snapshot: &Snapshot| -> RustVec<Option<u32>> {
-        snapshot.ledger.ledger_entries.iter().filter_map(|(key, (_entry, ttl))| {
-            match **key {
-                LedgerKey::ContractData(ref data) => {
-                    // Only worry about storage for the contract under test
-                    if data.contract != contract_address {
-                        return None;
-                    }
-                    match data.durability {
-                        ContractDataDurability::Temporary => {
-                            Some(*ttl)
+        snapshot
+            .ledger
+            .ledger_entries
+            .iter()
+            .filter_map(|(key, (_entry, ttl))| {
+                match **key {
+                    LedgerKey::ContractData(ref data) => {
+                        // Only worry about storage for the contract under test
+                        if data.contract != contract_address {
+                            return None;
                         }
-                        _ => {
-                            None
+                        match data.durability {
+                            ContractDataDurability::Temporary => Some(*ttl),
+                            _ => None,
                         }
                     }
+                    _ => None,
                 }
-                _ => {
-                    None
-                }
-            }
-        }).collect()
+            })
+            .collect()
     };
 
     let pre_ttls = get_temp_ttls(&pre_snapshot);
@@ -925,10 +924,7 @@ fn check_for_zero_allowance_bug(
     assert_eq!(pre_ttls, post_ttls);
 }
 
-fn set_env_prng_seed(
-    env: &Env,
-    env_prng_seed: &mut u64,
-) {
+fn set_env_prng_seed(env: &Env, env_prng_seed: &mut u64) {
     let mut seed: [u8; 32] = [0; 32];
     seed[0] = (*env_prng_seed >> (8 * 0)) as u8;
     seed[1] = (*env_prng_seed >> (8 * 1)) as u8;

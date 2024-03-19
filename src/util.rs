@@ -1,8 +1,6 @@
+use soroban_sdk::testutils::arbitrary::arbitrary::{self, Arbitrary, Unstructured};
 use soroban_sdk::{Address, String};
 use std::vec::Vec as RustVec;
-use soroban_sdk::testutils::arbitrary::arbitrary::{
-    self, Arbitrary, Unstructured
-};
 
 pub fn string_to_bytes(s: String) -> RustVec<u8> {
     let mut out = vec![0; s.len() as usize];

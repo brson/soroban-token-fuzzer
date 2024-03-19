@@ -1,15 +1,17 @@
 #![no_main]
 
 use libfuzzer_sys::{fuzz_target, Corpus};
-use soroban_sdk::{Address, Env, Error, InvokeError, String, TryFromVal, Val, unwrap::UnwrapOptimized};
-use soroban_token_fuzzer::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token;
+use soroban_sdk::{
+    unwrap::UnwrapOptimized, Address, Env, Error, InvokeError, String, TryFromVal, Val,
+};
+use soroban_token_fuzzer::*;
 
 use comet::c_pool::comet::{CometPoolContract, CometPoolContractClient};
 
 use soroban_sdk::testutils::arbitrary::fuzz_catch_panic;
-use soroban_sdk::xdr::{ScErrorType, ScErrorCode};
+use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
 
 // This is the entrypoint.
 //
@@ -48,11 +50,8 @@ impl ContractTokenOps for TokenOps {
 
         let factory_address = admin.clone();
         let controller_address = admin.clone();
-        
-        let r = admin_client.try_init(
-            &factory_address,
-            &controller_address,
-        );
+
+        let r = admin_client.try_init(&factory_address, &controller_address);
         assert!(r.is_ok());
 
         // bind tokens
@@ -64,8 +63,18 @@ impl ContractTokenOps for TokenOps {
         token_client_2.mint(admin, &to_stroop(50_000));
 
         // todo: const numbers
-        admin_client.bind(&token_client_1.address, &to_stroop(50_000), &to_stroop(12), admin);
-        admin_client.bind(&token_client_2.address, &to_stroop(50_000), &to_stroop(12), admin);
+        admin_client.bind(
+            &token_client_1.address,
+            &to_stroop(50_000),
+            &to_stroop(12),
+            admin,
+        );
+        admin_client.bind(
+            &token_client_2.address,
+            &to_stroop(50_000),
+            &to_stroop(12),
+            admin,
+        );
 
         let controller = admin.clone();
         admin_client.set_swap_fee(&3_000, &controller);
@@ -141,7 +150,7 @@ impl<'a> TokenAdminClient<'a> for AdminClient<'a> {
         self.client.env.mock_all_auths();
 
         let (token_address_1, token_address_2) = self.get_token_addresses();
-        
+
         let token_client_1 = example_token::TokenClient::new(&self.client.env, &token_address_1);
         let token_client_2 = example_token::TokenClient::new(&self.client.env, &token_address_2);
 
@@ -150,14 +159,16 @@ impl<'a> TokenAdminClient<'a> for AdminClient<'a> {
 
         token_client_1.mint(to, &(i128::MAX - balance_1));
         token_client_2.mint(to, &(i128::MAX - balance_2));
-        
+
         let max_amounts_in = soroban_sdk::vec![&self.client.env, i128::MAX, i128::MAX];
 
         let r = fuzz_catch_panic(|| self.client.join_pool(amount, &max_amounts_in, to));
         if r.is_err() {
-            Err(Err(
-                Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput).into()
-            ))
+            Err(Err(Error::from_type_and_code(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+            )
+            .into()))
         } else {
             Ok(Ok(()))
         }

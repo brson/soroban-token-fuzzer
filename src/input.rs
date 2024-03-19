@@ -1,9 +1,9 @@
 use crate::addrgen::AddressGenerator;
+use crate::util::SmartI128;
 use crate::DAY_IN_LEDGERS;
 use arbitrary::Unstructured;
 use soroban_sdk::testutils::arbitrary::arbitrary;
 use std::vec::Vec as RustVec;
-use crate::util::SmartI128;
 
 pub const NUMBER_OF_ADDRESSES: usize = 3;
 

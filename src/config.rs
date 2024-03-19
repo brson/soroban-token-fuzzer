@@ -1,9 +1,9 @@
+use soroban_sdk::testutils::Address as _;
+use soroban_sdk::token;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::SorobanAuthorizationEntry;
 use soroban_sdk::{Address, Env};
 use soroban_sdk::{Error, InvokeError, TryFromVal, Val};
-use soroban_sdk::token;
-use soroban_sdk::testutils::Address as _;
 
 /// Token-specific configuration and customization.
 ///
