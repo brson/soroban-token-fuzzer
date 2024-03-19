@@ -89,7 +89,6 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
         env.budget().reset_unlimited();
 
         for command in &transaction.commands {
-            // println!("------- command: {:#?}", command);
             exec_command(
                 &command,
                 &env,
@@ -142,7 +141,7 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
                 }
             }
 
-            //assert_state(&contract_state, &current_state);
+            assert_state(&contract_state, &current_state);
         }
     }
 
@@ -160,14 +159,9 @@ fn exec_command(
     let admin_client = &current_state.admin_client;
     let token_client = &current_state.token_client;
     let accounts = &current_state.accounts;
-
-    if !(matches!(command, Command::Mint(_))) {
-        return;
-    }
     
     match command {
         Command::Mint(input) => {
-            println!("fuzz mint input: {input:?}");
             mock_auths_for_command(
                 env,
                 "mint",
@@ -178,7 +172,6 @@ fn exec_command(
                 (&accounts[input.to_account_index].address, input.amount.0).into_val(env),
             );
 
-            let balance_before_mint = token_client.balance(&accounts[input.to_account_index].address);
             let r = admin_client.try_mint(&accounts[input.to_account_index].address, &input.amount.0);
 
             verify_token_contract_result(&env, &r);
@@ -187,23 +180,13 @@ fn exec_command(
                 assert!(r.is_err());
             }
 
+            // We use mock_auths in Comet mint
             /*if input.auths[0] == false {
                 assert!(r.is_err());
             }*/
 
             if let Ok(r) = r {
                 let _r = r.expect("ok");
-                /*
-                let actual_mint_amount = token_client.balance(&accounts[input.to_account_index].address).checked_sub(balance_before_mint).expect("overflow");
-
-                if input.amount.0 > 0 {
-                    eprintln!("mint expected {}, actual {actual_mint_amount}", input.amount.0);
-                }
-
-                contract_state.add_balance(&accounts[input.to_account_index].address, actual_mint_amount);
-                contract_state.sum_of_mints =
-                    contract_state.sum_of_mints.clone() + BigInt::from(actual_mint_amount);
-                */
 
                 contract_state.add_balance(&accounts[input.to_account_index].address, input.amount.0);
                 contract_state.sum_of_mints =

@@ -47,9 +47,8 @@ mobloom.rev = "63137cf1031e90a55bfad861a80a68e1ad2d98ce"
 mobloom.package = "soroban-token-contract"
 mobloom.features = ["testutils"]
 
-# comet.path = "../../comet-contracts-v1/contracts/"
 comet.git = "https://github.com/Aimeedeer/comet-contracts-v1.git"
-comet.rev = "502c00bf15a7778964fc01e576e6ec415e7b0b3a"
+comet.rev = "bc00345d9948f9ef3a3d571d7d79f77202cc119d"
 comet.package = "contracts"
 comet.features = ["testutils"]
 soroban-fixed-point-math = "1.0.0"

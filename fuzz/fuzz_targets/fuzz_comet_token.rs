@@ -1,15 +1,12 @@
 #![no_main]
 
 use libfuzzer_sys::{fuzz_target, Corpus};
-use soroban_sdk::{Address, Env, Error, InvokeError, String, TryFromVal, Val, unwrap::UnwrapOptimized, ConversionError, xdr::Error as XdrError};
+use soroban_sdk::{Address, Env, Error, InvokeError, String, TryFromVal, Val, unwrap::UnwrapOptimized};
 use soroban_token_fuzzer::*;
-use example_token;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token;
 
 use comet::c_pool::comet::{CometPoolContract, CometPoolContractClient};
-use comet::c_consts::{MAX_CPOW_BASE, MIN_CPOW_BASE, BONE};
-use soroban_fixed_point_math::FixedPoint;
 
 use soroban_sdk::testutils::arbitrary::fuzz_catch_panic;
 use soroban_sdk::xdr::{ScErrorType, ScErrorCode};
