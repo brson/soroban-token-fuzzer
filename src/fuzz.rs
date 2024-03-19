@@ -919,8 +919,6 @@ fn check_for_zero_allowance_bug(
 
     let pre_ttls = get_temp_ttls(&pre_snapshot);
     let post_ttls = get_temp_ttls(&post_snapshot);
-    // todo
-    // fix comet fuzzer
     assert_eq!(pre_ttls, post_ttls);
 }
 

@@ -166,7 +166,7 @@ checksum = "28c122c3980598d243d63d9a704629a2d748d101f278052ff068be5a4423ab6f"
 [[package]]
 name = "contracts"
 version = "0.0.7"
-source = "git+https://github.com/Aimeedeer/comet-contracts-v1.git?rev=502c00bf15a7778964fc01e576e6ec415e7b0b3a#502c00bf15a7778964fc01e576e6ec415e7b0b3a"
+source = "git+https://github.com/Aimeedeer/comet-contracts-v1.git?rev=bc00345d9948f9ef3a3d571d7d79f77202cc119d#bc00345d9948f9ef3a3d571d7d79f77202cc119d"
 dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
