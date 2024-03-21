@@ -1166,7 +1166,7 @@ dependencies = [
 [[package]]
 name = "soroban-token-contract"
 version = "0.0.6"
-source = "git+https://github.com/Aimeedeer/Mobloom-soroban-contracts.git?rev=63137cf1031e90a55bfad861a80a68e1ad2d98ce#63137cf1031e90a55bfad861a80a68e1ad2d98ce"
+source = "git+https://github.com/Aimeedeer/soroswap.git?rev=6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a#6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
 dependencies = [
  "soroban-sdk",
  "soroban-token-sdk",
@@ -1175,7 +1175,7 @@ dependencies = [
 [[package]]
 name = "soroban-token-contract"
 version = "0.0.6"
-source = "git+https://github.com/Aimeedeer/soroswap.git?rev=6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a#6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a"
+source = "git+https://github.com/Aimeedeer/Mobloom-soroban-contracts.git?rev=8bc4566cf4ee2ef755936051df81599360591ccc#8bc4566cf4ee2ef755936051df81599360591ccc"
 dependencies = [
  "soroban-sdk",
  "soroban-token-sdk",
@@ -1227,8 +1227,8 @@ dependencies = [
  "libfuzzer-sys",
  "soroban-fixed-point-math",
  "soroban-sdk",
- "soroban-token-contract 0.0.6 (git+https://github.com/Aimeedeer/Mobloom-soroban-contracts.git?rev=63137cf1031e90a55bfad861a80a68e1ad2d98ce)",
  "soroban-token-contract 0.0.6 (git+https://github.com/Aimeedeer/soroswap.git?rev=6cf027370dbee39cb0a8d848a9f520c9c6ef3c1a)",
+ "soroban-token-contract 0.0.6 (git+https://github.com/Aimeedeer/Mobloom-soroban-contracts.git?rev=8bc4566cf4ee2ef755936051df81599360591ccc)",
  "soroban-token-contract 0.0.6 (git+https://github.com/Aimeedeer/phoenix-contracts.git?rev=be66c3ab027efd4426745db9ec8b468243cb18df)",
  "soroban-token-contract 0.1.0",
  "soroban-token-fuzzer",

@@ -43,7 +43,7 @@ phoenix.package = "soroban-token-contract"
 phoenix.features = ["testutils"]
 
 mobloom.git = "https://github.com/Aimeedeer/Mobloom-soroban-contracts.git"
-mobloom.rev = "63137cf1031e90a55bfad861a80a68e1ad2d98ce"
+mobloom.rev = "8bc4566cf4ee2ef755936051df81599360591ccc"
 mobloom.package = "soroban-token-contract"
 mobloom.features = ["testutils"]
 
