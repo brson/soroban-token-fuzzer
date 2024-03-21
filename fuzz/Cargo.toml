@@ -33,7 +33,7 @@ excellar.package = "excellar-token-contract"
 excellar.features = ["testutils"]
 
 aquarius.git = "https://github.com/Aimeedeer/soroban-amm.git"
-aquarius.rev = "3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+aquarius.rev = "90b16b3c7ac38147f43d5edf60dae0a2c77cf2df"
 aquarius.package = "soroban-token-contract"
 aquarius.features = ["testutils"]
 

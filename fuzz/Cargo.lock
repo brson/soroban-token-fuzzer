@@ -5,7 +5,7 @@ version = 3
 [[package]]
 name = "access_control"
 version = "0.1.0"
-source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=90b16b3c7ac38147f43d5edf60dae0a2c77cf2df#90b16b3c7ac38147f43d5edf60dae0a2c77cf2df"
 dependencies = [
  "soroban-sdk",
  "utils",
@@ -1193,7 +1193,7 @@ dependencies = [
 [[package]]
 name = "soroban-token-contract"
 version = "0.1.0"
-source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=90b16b3c7ac38147f43d5edf60dae0a2c77cf2df#90b16b3c7ac38147f43d5edf60dae0a2c77cf2df"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1410,7 +1410,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf#3b3b26b7ede40d65bd57a571289eb9d1ea9a2cdf"
+source = "git+https://github.com/Aimeedeer/soroban-amm.git?rev=90b16b3c7ac38147f43d5edf60dae0a2c77cf2df#90b16b3c7ac38147f43d5edf60dae0a2c77cf2df"
 dependencies = [
  "soroban-sdk",
 ]
