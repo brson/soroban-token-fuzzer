@@ -38,7 +38,7 @@ aquarius.package = "soroban-token-contract"
 aquarius.features = ["testutils"]
 
 phoenix.git = "https://github.com/Aimeedeer/phoenix-contracts.git"
-phoenix.rev = "be66c3ab027efd4426745db9ec8b468243cb18df"
+phoenix.rev = "b4cbd005d93475cf53144333ba619c880fe0afa6"
 phoenix.package = "soroban-token-contract"
 phoenix.features = ["testutils"]
 
