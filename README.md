@@ -8,14 +8,20 @@ Soroban contract authors implementing tokens can use it
 to gain confidence in their code.
 
 
-## How to use
+## Prerequisites
 
-**Note: at present this fuzzer has only been tested on
-the Stellar native token, and the Soroban example token.
-It needs work to be adapted to requirements of e.g. tokens
-that implement logic that deviates from the example token.
-If you find the fuzzer triggers false positives on your
-token please file issues.**
+At present, this requires a specific commit of `rs-soroban-env`
+and `rs-soroban-sdk` to be checked out in directories adjacent to `soroban-token-fuzzer`.
+
+- rs-soroban-env repo  : https://github.com/stellar/rs-stellar-contract-env.git
+- rs-soroban-env commit: f035dda68e061a8fa18ab0c4e35b4b0618d15324
+- rs-soroban-sdk repo  : https://github.com/brson/rs-stellar-contract-sdk.git
+- rs-soroban-sdk commit: a2499ddb86f23f0820faeb77e46f391aa4194a3b
+
+This changes over time as the SDK changes.
+
+
+## How to use
 
 Install [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz):
 
