@@ -38,6 +38,13 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
 
     //eprintln!("input: {input:#?}");
 
+    // We use a new Env each transaction, and the prng seed needs to be set
+    // explicitly. This variable tracks the seed. If we don't change the seed we
+    // see mysterious errors calling unknown contract methods because we
+    // accidentally generated duplicate addresses (in Env::register_contract)
+    // and installed different contracts to them.
+    //
+    // cc https://discord.com/channels/897514728459468821/1202349664196632677/1216880949124534293
     let mut env_prng_seed: u64 = 0;
 
     // The initial Env. This will be destroyed and recreated when we advance time,
@@ -48,15 +55,15 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     let token_contract_id_bytes: RustVec<u8>;
 
     // Do initial setup, including registering the contract.
-    //    {
-    input.address_generator.setup_account_storage(&env);
+    {
+        input.address_generator.setup_account_storage(&env);
 
-    let signers = input.address_generator.generate_signers(&env);
-    let admin = &signers[0].address;
+        let signers = input.address_generator.generate_signers(&env);
+        let admin = &signers[0].address;
 
-    let token_contract_id = config.register_contract_init(&env, admin);
-    token_contract_id_bytes = address_to_bytes(&token_contract_id);
-    //    }
+        let token_contract_id = config.register_contract_init(&env, admin);
+        token_contract_id_bytes = address_to_bytes(&token_contract_id);
+    }
 
     let mut contract_state = ContractState::init();
     let mut current_state = CurrentState::new(
@@ -71,7 +78,12 @@ pub fn fuzz_token(config: Config, input: Input) -> Corpus {
     // fixme put this in the ContractState ctor
     {
         let token_client = &current_state.token_client;
+        let signers = input.address_generator.generate_signers(&env);
+        let admin = &signers[0].address;
 
+        // Some tokens have an initial balance > 0.
+        // e.g. CometDEX LP token needs some initial balance for the pool to be "finalized" (activated).
+        // This assumes that balance is minted to the admin and asks the contract for the initial balance.
         let init_balance = token_client.balance(admin);
         if init_balance > 0 {
             contract_state.set_balance(admin, init_balance);
@@ -181,7 +193,7 @@ fn exec_command(
                 assert!(r.is_err());
             }
 
-            // We use mock_auths in Comet mint
+            // fixme We use mock_auths in Comet mint
             /*if input.auths[0] == false {
                 assert!(r.is_err());
             }*/
