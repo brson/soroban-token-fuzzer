@@ -28,7 +28,7 @@ soroswap-pair-token.package = "soroswap-pair"
 soroswap-pair-token.features = ["testutils"]
 
 excellar.git = "https://github.com/Aimeedeer/excellar.git"
-excellar.rev = "23684ff32c7408db364af7a33a37427b38b2a746"
+excellar.rev = "bfa5774248772b7eb73c67992302c3dcad4e64bc"
 excellar.package = "excellar-token-contract"
 excellar.features = ["testutils"]
 
